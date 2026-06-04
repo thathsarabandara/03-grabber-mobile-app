@@ -18,17 +18,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
     {
       'title': 'Control Anywhere',
       'description': 'Securely connect and control your robotic devices from anywhere using low-latency cloud infrastructure.',
-      'icon': Icons.public_rounded,
+      'image': 'assets/control.png',
     },
     {
       'title': 'Live Telemetry',
       'description': 'Monitor your robot\'s health, battery, and sensor readings in real-time with stunning HD visuals.',
-      'icon': Icons.speed_rounded,
+      'image': 'assets/telemetry.png',
     },
     {
       'title': 'Agentic AI',
       'description': 'Automate complex tasks using advanced artificial intelligence and computer vision models.',
-      'icon': Icons.psychology_rounded,
+      'image': 'assets/agentic.png',
     },
   ];
 
@@ -48,14 +48,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFF155EEF),
       body: Stack(
         children: [
+          // Blue wave background at the top
           Positioned(
-            top: 0, left: 0, right: 0, height: 400,
+            top: 0, left: 0, right: 0, height: size.height * 0.7, // Increased blue area
             child: CustomPaint(painter: HeaderWavePainter()),
           ),
+          
+          // Stationary White Sheet at the bottom
+          Positioned(
+            bottom: 0, left: 0, right: 0,
+            height: size.height * 0.35, // Covers bottom 42%
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.only(topLeft: Radius.circular(40), topRight: Radius.circular(40)),
+                boxShadow: [
+                  BoxShadow(color: Colors.black26, blurRadius: 40, offset: Offset(0, -10)),
+                  BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -4)),
+                ],
+              ),
+            ),
+          ),
+
           SafeArea(
             child: Column(
               children: [
@@ -78,64 +98,70 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
                     },
                     itemCount: _pages.length,
                     itemBuilder: (context, index) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            SlideFade(
-                              animation: _animController,
-                              delay: 0.1,
-                              child: Container(
-                                padding: const EdgeInsets.all(40),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.15),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                                ),
-                                child: Icon(
-                                  _pages[index]['icon'] as IconData,
-                                  size: 100,
-                                  color: Colors.white,
+                      return Column(
+                        children: [
+                          // Top part: Icon over blue background
+                          Expanded(
+                            flex: 55, // Takes up the top space matching the blue area
+                            child: Center(
+                              child: SlideFade(
+                                animation: _animController,
+                                delay: 0.1,
+                                child: Container(
+                                  padding: const EdgeInsets.all(40),
+                                  decoration: BoxDecoration(
+                                  ),
+                                  child: Image(
+                                    image: AssetImage(_pages[index]['image'] as String),
+                                    height: 400,
+                                    width: 400,
+                                    fit: BoxFit.contain,
+                                  ),
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 64),
-                            SlideFade(
-                              animation: _animController,
-                              delay: 0.2,
-                              child: Container(
-                                padding: const EdgeInsets.all(32),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(40),
-                                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 30, offset: const Offset(0, 10))],
-                                ),
-                                child: Column(
-                                  children: [
-                                    Text(
+                          ),
+                          
+                          // Bottom part: Text over white sheet
+                          Expanded(
+                            flex: 32, // Takes up the bottom space matching the white sheet
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SlideFade(
+                                    animation: _animController,
+                                    delay: 0.2,
+                                    child: Text(
                                       _pages[index]['title'] as String,
                                       style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFF1D2939), letterSpacing: -1),
                                       textAlign: TextAlign.center,
                                     ),
-                                    const SizedBox(height: 16),
-                                    Text(
+                                  ),
+                                  const SizedBox(height: 16),
+                                  SlideFade(
+                                    animation: _animController,
+                                    delay: 0.3,
+                                    child: Text(
                                       _pages[index]['description'] as String,
                                       style: const TextStyle(fontSize: 15, color: Color(0xFF64748B), height: 1.5),
                                       textAlign: TextAlign.center,
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       );
                     },
                   ),
                 ),
+                
+                // Bottom navigation bar over the white sheet
                 Padding(
-                  padding: const EdgeInsets.all(32.0),
+                  padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
