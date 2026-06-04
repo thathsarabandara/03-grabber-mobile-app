@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../widgets/custom_button.dart';
+import '../../../widgets/premium_widgets.dart';
 
 class ControlScreen extends StatefulWidget {
   const ControlScreen({super.key});
@@ -11,66 +10,102 @@ class ControlScreen extends StatefulWidget {
   State<ControlScreen> createState() => _ControlScreenState();
 }
 
-class _ControlScreenState extends State<ControlScreen> {
-  double _baseAngle = 90;
-  double _shoulderAngle = 45;
-  double _elbowAngle = 135;
-  double _gripperAngle = 0;
+class _ControlScreenState extends State<ControlScreen> with TickerProviderStateMixin {
+  late AnimationController _animController;
 
-  bool _joystickMode = false;
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
+    _animController.forward();
+    
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Live Control'),
-        actions: [
-          IconButton(
-            icon: Icon(_joystickMode ? LucideIcons.sliders : LucideIcons.gamepad2),
-            onPressed: () {
-              setState(() {
-                _joystickMode = !_joystickMode;
-              });
-            },
-          ),
-          IconButton(
-            icon: const Icon(LucideIcons.mic),
-            onPressed: () => context.push('/ai-control'),
-          ),
-        ],
-      ),
-      body: Column(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: Stack(
         children: [
-          // Live Visualization Placeholder
-          Container(
-            height: 250,
-            width: double.infinity,
-            color: theme.colorScheme.surface,
-            child: Stack(
+          Positioned(
+            top: 0, left: 0, right: 0, height: 350,
+            child: CustomPaint(painter: HeaderWavePainter()),
+          ),
+          
+          SafeArea(
+            bottom: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Center(
-                  child: Icon(
-                    LucideIcons.camera,
-                    size: 64,
-                    color: theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Control Hub',
+                        style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -1.0),
+                      ),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.settings_rounded, color: Colors.white),
+                          onPressed: () {},
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Positioned(
-                  top: 16,
-                  left: 16,
+                
+                Expanded(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(16),
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.only(topLeft: Radius.circular(40), topRight: Radius.circular(40)),
+                      boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 30, offset: Offset(0, -10))],
                     ),
-                    child: const Row(
+                    child: Column(
                       children: [
-                        Icon(LucideIcons.radio, size: 16, color: AppTheme.success),
-                        SizedBox(width: 8),
-                        Text('LIVE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        SlideFade(
+                          animation: _animController,
+                          delay: 0.1,
+                          child: _buildModeCard(
+                            title: 'Manual Control',
+                            description: 'Take full control with high-precision joysticks and live telemetry.',
+                            icon: Icons.gamepad_rounded,
+                            color: const Color(0xFF155EEF),
+                            onTap: () => context.push('/manual-control'),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        SlideFade(
+                          animation: _animController,
+                          delay: 0.2,
+                          child: _buildModeCard(
+                            title: 'Agentic AI Control',
+                            description: 'Let advanced AI models execute autonomous tasks and operations.',
+                            icon: Icons.psychology_rounded,
+                            color: const Color(0xFF8B5CF6),
+                            onTap: () => context.push('/ai-control'),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -78,129 +113,47 @@ class _ControlScreenState extends State<ControlScreen> {
               ],
             ),
           ),
-          // Action Buttons
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildActionButton(context, LucideIcons.home, 'Home', () {}),
-                _buildActionButton(context, LucideIcons.save, 'Save Pose', () {}),
-                _buildActionButton(context, LucideIcons.play, 'Replay', () {}),
-                _buildActionButton(context, LucideIcons.alertOctagon, 'E-Stop', () {}, isDanger: true),
-              ],
-            ),
-          ),
-          const Divider(),
-          // Controls
-          Expanded(
-            child: _joystickMode ? _buildJoystickMode(theme) : _buildSliderMode(theme),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildActionButton(BuildContext context, IconData icon, String label, VoidCallback onPressed, {bool isDanger = false}) {
-    final color = isDanger ? AppTheme.danger : Theme.of(context).colorScheme.primary;
-    return Column(
-      children: [
-        IconButton(
-          onPressed: onPressed,
-          icon: Icon(icon, color: color),
-          style: IconButton.styleFrom(
-            backgroundColor: color.withOpacity(0.1),
-            padding: const EdgeInsets.all(12),
-          ),
+  Widget _buildModeCard({required String title, required String description, required IconData icon, required Color color, required VoidCallback onTap}) {
+    return BouncingCard(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(32),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 20, offset: const Offset(0, 10))],
+          border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
         ),
-        const SizedBox(height: 4),
-        Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color, fontWeight: FontWeight.bold)),
-      ],
-    );
-  }
-
-  Widget _buildSliderMode(ThemeData theme) {
-    return ListView(
-      padding: const EdgeInsets.all(16.0),
-      children: [
-        _buildJointSlider('Base', _baseAngle, 0, 180, (v) => setState(() => _baseAngle = v)),
-        _buildJointSlider('Shoulder', _shoulderAngle, 0, 180, (v) => setState(() => _shoulderAngle = v)),
-        _buildJointSlider('Elbow', _elbowAngle, 0, 180, (v) => setState(() => _elbowAngle = v)),
-        _buildJointSlider('Gripper', _gripperAngle, 0, 100, (v) => setState(() => _gripperAngle = v)),
-      ],
-    );
-  }
-
-  Widget _buildJointSlider(String name, double value, double min, double max, ValueChanged<double> onChanged) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Row(
           children: [
-            Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-            Text('${value.toInt()}°', style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryBlue)),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 40),
+            ),
+            const SizedBox(width: 24),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF1D2939), letterSpacing: -0.5)),
+                  const SizedBox(height: 8),
+                  Text(description, style: const TextStyle(fontSize: 14, color: Color(0xFF64748B), height: 1.4)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFFCBD5E1), size: 20),
           ],
         ),
-        Slider(
-          value: value,
-          min: min,
-          max: max,
-          onChanged: onChanged,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildJoystickMode(ThemeData theme) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 200,
-            height: 200,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: theme.colorScheme.surface,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  spreadRadius: 5,
-                )
-              ],
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                const Icon(LucideIcons.arrowUp, size: 24, color: AppTheme.textSecondaryLight),
-                const Positioned(bottom: 16, child: Icon(LucideIcons.arrowDown, size: 24, color: AppTheme.textSecondaryLight)),
-                const Positioned(left: 16, child: Icon(LucideIcons.arrowLeft, size: 24, color: AppTheme.textSecondaryLight)),
-                const Positioned(right: 16, child: Icon(LucideIcons.arrowRight, size: 24, color: AppTheme.textSecondaryLight)),
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppTheme.primaryBlue,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.primaryBlue.withOpacity(0.5),
-                        blurRadius: 10,
-                        spreadRadius: 2,
-                      )
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 32),
-          Text('Virtual Joystick Mode', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
-          const Text('Drag to control Base and Shoulder'),
-        ],
       ),
     );
   }
