@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../../widgets/status_card.dart';
 import '../../../widgets/premium_widgets.dart';
+import 'package:go_router/go_router.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -66,7 +68,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                             ),
                             const SizedBox(height: 4),
                             const Text(
-                              'Smart Home Robot Platform',
+                              'Smart Robot Arm',
                               style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5, height: 1.2),
                             ),
                             const SizedBox(height: 8),
@@ -85,7 +87,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _buildHeaderIcon(Icons.notifications_none_rounded, hasBadge: true),
+                          _buildHeaderIcon(
+                            Icons.notifications_none_rounded, 
+                            hasBadge: true, 
+                            onTap: () => _showNotificationPanel(context),
+                          ),
                           const SizedBox(width: 8),
                           _buildHeaderIcon(Icons.settings_rounded),
                           const SizedBox(width: 8),
@@ -186,7 +192,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
 
-  Widget _buildHeaderIcon(IconData icon, {bool hasBadge = false}) {
+  Widget _buildHeaderIcon(IconData icon, {bool hasBadge = false, VoidCallback? onTap}) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.15),
@@ -196,7 +202,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       child: Stack(
         alignment: Alignment.center,
         children: [
-          IconButton(icon: Icon(icon, color: Colors.white), onPressed: () {}),
+          IconButton(icon: Icon(icon, color: Colors.white), onPressed: onTap ?? () {}),
           if (hasBadge)
             Positioned(
               top: 10, right: 10,
@@ -207,6 +213,114 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
 
+  void _showNotificationPanel(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: const BoxDecoration(
+          color: Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.only(topLeft: Radius.circular(30), topRight: Radius.circular(30)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 24),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Notifications', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1D2939))),
+                  TextButton(
+                    onPressed: () {},
+                    child: const Text('Mark all as read', style: TextStyle(color: Color(0xFF155EEF), fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                children: [
+                  _buildNotificationItem(context, 'Movement Detected', 'Robot detected movement in Sector A.', Icons.warning_rounded, Colors.orange, '2 min ago'),
+                  _buildNotificationItem(context, 'Battery Low', 'Robot power is at 15%. Returning to dock.', Icons.battery_alert_rounded, Colors.red, '15 min ago'),
+                  _buildNotificationItem(context, 'System Update', 'Firmware v2.4.1 is successfully installed.', Icons.system_update_rounded, Colors.blue, '2 hours ago'),
+                  _buildNotificationItem(context, 'Patrol Completed', 'Routine patrol finished with 0 anomalies.', Icons.check_circle_rounded, Colors.green, '5 hours ago'),
+                  const SizedBox(height: 40),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationItem(BuildContext context, String title, String message, IconData icon, Color color, String time) {
+    return GestureDetector(
+      onTap: () {
+        context.pop(); // Close the bottom sheet first
+        context.go('/notification-details', extra: {
+          'title': title,
+          'message': message,
+          'icon': icon,
+          'color': color,
+          'time': time,
+        });
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
+        ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1D2939)), overflow: TextOverflow.ellipsis)),
+                    const SizedBox(width: 8),
+                    Text(time, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(message, style: TextStyle(fontSize: 14, color: Colors.grey.shade600, height: 1.3)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ));
+  }
+
   Widget _buildRobotStatusSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -215,17 +329,17 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(child: _buildEssentialCard('Status', Icons.check_circle_rounded, 'Online', 'Connected', Colors.green)),
+            Expanded(child: EssentialStatusCard(title: 'Status', icon: Icons.check_circle_rounded, value: 'Online', subtitle: 'Connected', color: Colors.green)),
             const SizedBox(width: 16),
-            Expanded(child: _buildEssentialCard('Power', Icons.battery_charging_full_rounded, '82%', 'Discharging', Colors.teal)),
+            Expanded(child: EssentialStatusCard(title: 'Power', icon: Icons.battery_charging_full_rounded, value: '82%', subtitle: 'Discharging', color: Colors.teal)),
           ],
         ),
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(child: _buildEssentialCard('Signal', Icons.signal_cellular_alt_rounded, 'Strong', 'Low Latency', Colors.blue)),
+            Expanded(child: EssentialStatusCard(title: 'Signal', icon: Icons.signal_cellular_alt_rounded, value: 'Strong', subtitle: 'Low Latency', color: Colors.blue)),
             const SizedBox(width: 16),
-            Expanded(child: _buildEssentialCard('Mode', Icons.explore_rounded, 'Patrol', 'Active', Colors.purple)),
+            Expanded(child: EssentialStatusCard(title: 'Mode', icon: Icons.explore_rounded, value: 'Patrol', subtitle: 'Active', color: Colors.purple)),
           ],
         ),
         const SizedBox(height: 16),
@@ -257,69 +371,24 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         const SizedBox(height: 12),
         Row(
           children: [
-            Expanded(child: _buildEssentialCard('Battery', Icons.battery_charging_full_rounded, '82%', 'Charging: No', Colors.green)),
+            Expanded(child: EssentialStatusCard(title: 'Battery', icon: Icons.battery_charging_full_rounded, value: '82%', subtitle: 'Charging: No', color: Colors.green)),
             const SizedBox(width: 16),
-            Expanded(child: _buildEssentialCard('Connection', Icons.wifi_rounded, 'Online', 'Latency: 32ms', Colors.blue)),
+            Expanded(child: EssentialStatusCard(title: 'Connection', icon: Icons.wifi_rounded, value: 'Online', subtitle: 'Latency: 32ms', color: Colors.blue)),
           ],
         ),
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(child: _buildEssentialCard('AI Engine', Icons.psychology_rounded, 'Running', 'Confidence: High', Colors.purple)),
+            Expanded(child: EssentialStatusCard(title: 'AI Engine', icon: Icons.psychology_rounded, value: 'Running', subtitle: 'Confidence: High', color: Colors.purple)),
             const SizedBox(width: 16),
-            Expanded(child: _buildEssentialCard('Security', Icons.shield_rounded, 'Normal', '0 Active Alerts', Colors.orange)),
+            Expanded(child: EssentialStatusCard(title: 'Security', icon: Icons.shield_rounded, value: 'Normal', subtitle: '0 Active Alerts', color: Colors.orange)),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildEssentialCard(String title, IconData icon, String value, String subtitle, Color color) {
-    return BouncingCard(
-      onTap: () {},
-      child: Container(
-        height: 120,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 10))],
-        ),
-        child: Stack(
-          children: [
-            Positioned(
-              right: -20,
-              bottom: -20,
-              child: Icon(icon, size: 100, color: Colors.white.withValues(alpha: 0.2)),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle),
-                        child: Icon(icon, size: 16, color: Colors.white),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white), overflow: TextOverflow.ellipsis),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
-                  Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.8))),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+
 
   Widget _buildActiveAlertCard() {
     return Column(
@@ -393,17 +462,17 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(child: _buildEssentialCard('Temperature', Icons.thermostat, '28°C', 'Core T1', Colors.orange)),
+            Expanded(child: EssentialStatusCard(title: 'Temperature', icon: Icons.thermostat, value: '28°C', subtitle: 'Core T1', color: Colors.orange)),
             const SizedBox(width: 16),
-            Expanded(child: _buildEssentialCard('Distance', Icons.straighten, '120 cm', 'Front Sonar', Colors.indigo)),
+            Expanded(child: EssentialStatusCard(title: 'Distance', icon: Icons.straighten, value: '120 cm', subtitle: 'Front Sonar', color: Colors.indigo)),
           ],
         ),
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(child: _buildEssentialCard('Speed', Icons.speed, '0.2 m/s', 'Motors', Colors.cyan)),
+            Expanded(child: EssentialStatusCard(title: 'Speed', icon: Icons.speed, value: '0.2 m/s', subtitle: 'Motors', color: Colors.cyan)),
             const SizedBox(width: 16),
-            Expanded(child: _buildEssentialCard('Power Draw', Icons.electrical_services, '1.8A', 'Total', Colors.redAccent)),
+            Expanded(child: EssentialStatusCard(title: 'Power Draw', icon: Icons.electrical_services, value: '1.8A', subtitle: 'Total', color: Colors.redAccent)),
           ],
         ),
       ],
