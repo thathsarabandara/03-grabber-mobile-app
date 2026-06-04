@@ -45,14 +45,16 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                     animation: _animController,
                     delay: 0.2,
                     child: Container(
-                      padding: const EdgeInsets.all(32),
+                      padding: const EdgeInsets.only(left: 30 , right: 30,top: 25,bottom: 25) ,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
                         boxShadow: [BoxShadow(color: const Color(0xFF155EEF).withValues(alpha: 0.2), blurRadius: 40)],
                       ),
-                      child: const Icon(Icons.smart_toy_rounded, size: 100, color: Colors.white),
+                      child: Image.asset(
+                        "assets/Grabber.png",
+                        fit: BoxFit.contain,
+                        height: 300, // Adjust size as needed
+                        width: 300,  // Adjust size as needed
+                      ),
                     ),
                   ),
                   const SizedBox(height: 48),
