@@ -5,6 +5,10 @@ import 'core/theme/app_theme.dart';
 import 'features/auth/screens/onboarding_screen.dart';
 import 'features/auth/screens/welcome_screen.dart';
 import 'features/auth/screens/login_screen.dart';
+import 'features/auth/screens/register_screen.dart';
+import 'features/auth/screens/otp_screen.dart';
+import 'features/auth/screens/forgot_password_screen.dart';
+import 'features/auth/screens/reset_password_screen.dart';
 import 'features/dashboard/screens/main_shell.dart';
 import 'features/dashboard/screens/dashboard_screen.dart';
 import 'features/robots/screens/robots_screen.dart';
@@ -41,7 +45,19 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/register',
-        builder: (context, state) => const Scaffold(body: Center(child: Text('Register Screen'))),
+        builder: (context, state) => const RegisterScreen(),
+      ),
+      GoRoute(
+        path: '/otp',
+        builder: (context, state) => const OtpScreen(),
+      ),
+      GoRoute(
+        path: '/forgot-password',
+        builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/reset-password',
+        builder: (context, state) => const ResetPasswordScreen(),
       ),
       ShellRoute(
         builder: (context, state, child) {
@@ -142,15 +158,16 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
               children: [
                 SlideFade(
                   animation: _animController,
-                  delay: 0.1,
+                  delay: 0.3,
                   child: Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
                     ),
-                    child: const Icon(Icons.precision_manufacturing_rounded, size: 80, color: Colors.white),
+                    child: Image.asset("assets/Grabber.png",
+                      fit: BoxFit.contain,
+                      height: 300,
+                      width: 300,
+                      ),
                   ),
                 ),
                 const SizedBox(height: 32),
