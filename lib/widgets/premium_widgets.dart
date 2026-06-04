@@ -90,3 +90,80 @@ class _BouncingCardState extends State<BouncingCard> with SingleTickerProviderSt
     );
   }
 }
+
+// Reusable Essential Status Card
+class EssentialStatusCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final String value;
+  final String subtitle;
+  final Color color;
+  final VoidCallback? onTap;
+
+  const EssentialStatusCard({
+    super.key,
+    required this.title,
+    required this.icon,
+    required this.value,
+    required this.subtitle,
+    required this.color,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return BouncingCard(
+      onTap: onTap ?? () {},
+      child: Container(
+        height: 120,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 10))
+          ],
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -20,
+              bottom: -20,
+              child: Icon(icon, size: 100, color: Colors.white.withValues(alpha: 0.2)),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2), 
+                          shape: BoxShape.circle
+                        ),
+                        child: Icon(icon, size: 16, color: Colors.white),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          title, 
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white), 
+                          overflow: TextOverflow.ellipsis
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+                  Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.8))),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
