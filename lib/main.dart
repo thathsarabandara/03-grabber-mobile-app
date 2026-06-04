@@ -11,6 +11,7 @@ import 'features/auth/screens/forgot_password_screen.dart';
 import 'features/auth/screens/reset_password_screen.dart';
 import 'features/dashboard/screens/main_shell.dart';
 import 'features/dashboard/screens/dashboard_screen.dart';
+import 'features/dashboard/screens/notification_details_screen.dart';
 import 'features/robots/screens/robots_screen.dart';
 import 'features/control/screens/control_screen.dart';
 import 'features/control/screens/manual_control_screen.dart';
@@ -93,6 +94,19 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/manual-control',
         builder: (context, state) => const ManualControlScreen(),
+      ),
+      GoRoute(
+        path: '/notification-details',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          return NotificationDetailsScreen(
+            title: extra['title'] ?? 'Notification',
+            message: extra['message'] ?? 'No details available.',
+            icon: extra['icon'] ?? Icons.info,
+            color: extra['color'] ?? Colors.blue,
+            time: extra['time'] ?? 'Just now',
+          );
+        },
       ),
     ],
   );
