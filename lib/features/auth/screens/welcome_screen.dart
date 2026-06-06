@@ -52,8 +52,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                       child: Image.asset(
                         "assets/Grabber.png",
                         fit: BoxFit.contain,
-                        height: 300, // Adjust size as needed
-                        width: 300,  // Adjust size as needed
+                        height: 200, // Adjust size as needed
+                        width: 200,  // Adjust size as needed
                       ),
                     ),
                   ),
