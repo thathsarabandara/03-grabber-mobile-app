@@ -1,6 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../../widgets/premium_widgets.dart';
+import '../../control/services/ble_service.dart';
 
 class RobotsScreen extends StatefulWidget {
   const RobotsScreen({super.key});
@@ -12,17 +16,103 @@ class RobotsScreen extends StatefulWidget {
 class _RobotsScreenState extends State<RobotsScreen> with TickerProviderStateMixin {
   late AnimationController _animController;
   late TabController _tabController;
+  List<ScanResult> _scanResults = [];
+  bool _isScanning = false;
+  Set<String> _connectingDevices = {};
+  StreamSubscription<BluetoothAdapterState>? _adapterStateSubscription;
+  BluetoothAdapterState _adapterState = BluetoothAdapterState.unknown;
 
   @override
   void initState() {
     super.initState();
     _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_onTabChanged);
+    _adapterStateSubscription = FlutterBluePlus.adapterState.listen((state) {
+      if (mounted) setState(() => _adapterState = state);
+    });
     _animController.forward();
+  }
+
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging) return;
+
+    if (_tabController.index == 1) {
+      _checkPermissionsAndScan();
+    } else {
+      FlutterBluePlus.stopScan();
+      setState(() {
+        _isScanning = false;
+      });
+    }
+  }
+
+  Future<void> _checkPermissionsAndScan() async {
+    // 1. Check if Bluetooth is supported
+    if (await FlutterBluePlus.isSupported == false) {
+      print("Bluetooth not supported");
+      return;
+    }
+
+    // 2. Request Android to turn on Bluetooth if it's off
+    if (FlutterBluePlus.adapterStateNow != BluetoothAdapterState.on) {
+      try {
+        await FlutterBluePlus.turnOn();
+      } catch (e) {
+        print("Bluetooth could not be turned on: $e");
+      }
+    }
+
+    // 3. Setup UI State
+    setState(() {
+      _isScanning = true;
+      _scanResults.clear();
+    });
+
+    // 4. Listen to scan results
+    FlutterBluePlus.scanResults.listen((results) {
+      if (mounted) {
+        setState(() {
+          _scanResults = results;
+        });
+      }
+    });
+
+    // 5. Start scan (automatically handles Android permissions)
+    try {
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
+    } catch (e) {
+      print("Error starting scan: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isScanning = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _connectToDevice(BluetoothDevice device) async {
+    setState(() => _connectingDevices.add(device.remoteId.str));
+    
+    bool success = await BleService().connectToDevice(device);
+    
+    if (mounted) {
+      setState(() => _connectingDevices.remove(device.remoteId.str));
+      if (success) {
+        context.go('/manual-control');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Failed to connect to device. Ensure it is in pairing mode.'),
+          backgroundColor: Color(0xFFEF4444),
+        ));
+      }
+    }
   }
 
   @override
   void dispose() {
+    _adapterStateSubscription?.cancel();
     _animController.dispose();
     _tabController.dispose();
     super.dispose();
@@ -130,28 +220,48 @@ class _RobotsScreenState extends State<RobotsScreen> with TickerProviderStateMix
   }
 
   Widget _buildInternetTab() {
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(24, 32, 24, 120),
-      itemCount: 2,
-      itemBuilder: (context, index) {
-        final isOnline = index == 0;
-        return SlideFade(
-          animation: _animController,
-          delay: 0.2 + (index * 0.1),
-          child: _buildRobotCard(
-            name: index == 0 ? 'Grabber Alpha' : 'Grabber Beta',
-            isOnline: isOnline,
-            battery: isOnline ? '87%' : '12%',
-            signal: isOnline ? 'Strong' : 'None',
-            lastActive: isOnline ? 'Active Now' : '2 days ago',
-            type: 'Cloud Connected',
-          ),
-        );
-      },
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.cloud_off_rounded, size: 64, color: const Color(0xFF94A3B8).withValues(alpha: 0.5)),
+          const SizedBox(height: 16),
+          const Text('No Internet Robots', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF1D2939))),
+          const SizedBox(height: 8),
+          const Text('You have not registered any cloud-connected robots yet.', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+        ],
+      ),
     );
   }
 
   Widget _buildBleTab() {
+    if (_adapterState == BluetoothAdapterState.off) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.bluetooth_disabled_rounded, size: 64, color: Color(0xFFEF4444)),
+            const SizedBox(height: 16),
+            const Text('Bluetooth is Off', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF1D2939))),
+            const SizedBox(height: 8),
+            const Text('Please turn on Bluetooth to discover and connect to local robots.', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => FlutterBluePlus.turnOn(),
+              icon: const Icon(Icons.bluetooth_rounded),
+              label: const Text('Turn On Bluetooth'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF155EEF),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            )
+          ],
+        ),
+      );
+    }
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 32, 24, 120),
       children: [
@@ -171,10 +281,12 @@ class _RobotsScreenState extends State<RobotsScreen> with TickerProviderStateMix
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: const Color(0xFF155EEF).withValues(alpha: 0.1), blurRadius: 20)]),
-                    child: const Icon(Icons.bluetooth_searching_rounded, size: 40, color: Color(0xFF155EEF)),
+                    child: _isScanning 
+                      ? const CircularProgressIndicator(color: Color(0xFF155EEF))
+                      : const Icon(Icons.bluetooth_searching_rounded, size: 40, color: Color(0xFF155EEF)),
                   ),
                   const SizedBox(height: 16),
-                  const Text('Scanning for Robots...', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF1D2939))),
+                  Text(_isScanning ? 'Scanning for Robots...' : 'Scan Complete', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF1D2939))),
                   const SizedBox(height: 8),
                   const Text('Ensure your robot is powered on and in pairing mode.', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
                 ],
@@ -186,24 +298,52 @@ class _RobotsScreenState extends State<RobotsScreen> with TickerProviderStateMix
         SlideFade(
           animation: _animController,
           delay: 0.3,
-          child: const Text('Discovered Devices', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF1D2939))),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Discovered Devices', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF1D2939))),
+              if (!_isScanning)
+                TextButton.icon(
+                  onPressed: _checkPermissionsAndScan,
+                  icon: const Icon(Icons.refresh_rounded, size: 18, color: Color(0xFF155EEF)),
+                  label: const Text('Rescan', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF155EEF))),
+                  style: TextButton.styleFrom(
+                    backgroundColor: const Color(0xFF155EEF).withValues(alpha: 0.1),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+            ],
+          ),
         ),
         const SizedBox(height: 16),
-        SlideFade(
-          animation: _animController,
-          delay: 0.4,
-          child: _buildBleDeviceCard('REX-47 LOCAL', 'RSSI: -45 dBm'),
-        ),
-        SlideFade(
-          animation: _animController,
-          delay: 0.5,
-          child: _buildBleDeviceCard('GRABBER-V2', 'RSSI: -68 dBm'),
-        ),
+        ..._scanResults.map((result) {
+          String deviceName = result.device.platformName;
+          if (deviceName.isEmpty) deviceName = result.advertisementData.advName;
+          if (deviceName.isEmpty) deviceName = 'Unknown Device';
+
+          return SlideFade(
+            animation: _animController,
+            delay: 0.4,
+            child: _buildBleDeviceCard(
+              result.device,
+              deviceName, 
+              'RSSI: ${result.rssi} dBm  •  ${result.device.remoteId.str}'
+            ),
+          );
+        }),
+        if (_scanResults.isEmpty && !_isScanning)
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Center(child: Text('No local devices found.', style: TextStyle(color: Color(0xFF94A3B8)))),
+          ),
       ],
     );
   }
 
-  Widget _buildBleDeviceCard(String name, String signal) {
+  Widget _buildBleDeviceCard(BluetoothDevice device, String name, String signal) {
+    bool isConnecting = _connectingDevices.contains(device.remoteId.str);
+
     return BouncingCard(
       onTap: () {},
       child: Container(
@@ -233,7 +373,17 @@ class _RobotsScreenState extends State<RobotsScreen> with TickerProviderStateMix
                 ],
               ),
             ),
-            _buildActionButton('Connect', Icons.link_rounded, const Color(0xFF155EEF), Colors.white, () {}, hasBorder: false, isSmall: true),
+            _buildActionButton(
+              isConnecting ? 'Connecting' : 'Connect', 
+              isConnecting ? Icons.hourglass_empty_rounded : Icons.link_rounded, 
+              const Color(0xFF155EEF), 
+              Colors.white, 
+              () {
+                if (!isConnecting) _connectToDevice(device);
+              }, 
+              hasBorder: false, 
+              isSmall: true
+            ),
           ],
         ),
       ),

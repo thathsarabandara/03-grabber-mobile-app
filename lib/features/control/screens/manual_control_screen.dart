@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../widgets/premium_widgets.dart';
+import '../services/ble_service.dart';
 
 class ManualControlScreen extends StatefulWidget {
   const ManualControlScreen({super.key});
@@ -15,11 +17,19 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
   late AnimationController _animController;
   bool _showJointPanel = false;
   
-  // Joint Values
-  double _j1 = 90;
-  double _j2 = 45;
-  double _j3 = 135;
-  double _j4 = 90;
+  final BleService _bleService = BleService();
+
+  // Joystick Offsets
+  Offset _leftJoyOffset = Offset.zero;
+  Offset _rightJoyOffset = Offset.zero;
+  Timer? _joystickTimer;
+  bool _isProcessingJoystick = false;
+
+  // Joint Values (Aligned with Firmware Config.h)
+  double _j1 = 90; // Base: min 1, max 180
+  double _j2 = 90; // Shoulder: min 40, max 120
+  double _j3 = 50; // Elbow: min 20, max 80
+  double _j4 = 90; // Gripper: min 70, max 100
 
   // Control Modes
   String _activeMode = 'MANUAL';
@@ -39,10 +49,18 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
       ]);
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     });
+
+    if (_activeNetwork == 'BLE') {
+      _bleService.connect();
+    }
+
+    // Process joystick inputs at 20Hz (every 50ms)
+    _joystickTimer = Timer.periodic(const Duration(milliseconds: 50), (_) => _processJoystickInput());
   }
 
   @override
   void dispose() {
+    _joystickTimer?.cancel();
     _animController.dispose();
     // Restore default orientations
     SystemChrome.setPreferredOrientations([
@@ -53,6 +71,43 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
     ]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
+  }
+
+  Future<void> _processJoystickInput() async {
+    if (_isProcessingJoystick) return;
+    _isProcessingJoystick = true;
+
+    bool sendJ1 = false, sendJ2 = false, sendJ3 = false, sendJ4 = false;
+
+    // Right Joystick: Base (dx) & Shoulder (dy)
+    if (_rightJoyOffset != Offset.zero) {
+      double dx = _rightJoyOffset.dx / 40.0; // range: -1 to +1
+      double dy = _rightJoyOffset.dy / 40.0; // range: -1 to +1
+
+      double newJ1 = (_j1 + (dx * 2.0)).clamp(1.0, 180.0);
+      double newJ2 = (_j2 - (dy * 2.0)).clamp(40.0, 120.0); // Invert so Up = Forward
+
+      if ((newJ1 - _j1).abs() > 0.1) { _j1 = newJ1; sendJ1 = true; }
+      if ((newJ2 - _j2).abs() > 0.1) { _j2 = newJ2; sendJ2 = true; }
+    }
+
+    // Left Joystick: Grip (dx) & Elbow (dy)
+    if (_leftJoyOffset != Offset.zero) {
+      double dx = _leftJoyOffset.dx / 40.0; // range: -1 to +1
+      double dy = _leftJoyOffset.dy / 40.0; // range: -1 to +1
+      
+      double newJ4 = (_j4 + (dx * 2.0)).clamp(70.0, 100.0); // Left/Right for Grip
+      double newJ3 = (_j3 - (dy * 2.0)).clamp(20.0, 80.0); // Invert so Up = Forward
+      
+      if ((newJ3 - _j3).abs() > 0.1) { _j3 = newJ3; sendJ3 = true; }
+      if ((newJ4 - _j4).abs() > 0.1) { _j4 = newJ4; sendJ4 = true; }
+    }
+
+    if (sendJ1 || sendJ2 || sendJ3 || sendJ4) {
+      setState(() {});
+      await _bleService.sendAllJointsCommand(_j1, _j2, _j3, _j4);
+    }
+    _isProcessingJoystick = false;
   }
 
   @override
@@ -99,23 +154,29 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
                   ),
                 ),
                 
-                // Left Joystick (Mobility Control)
+                // Left Joystick (Elbow / Grip)
                 Positioned(
                   left: 40, bottom: 32,
                   child: SlideFade(
                     animation: _animController,
                     delay: 0.3,
-                    child: _buildJoystick('MOBILITY', Icons.open_with_rounded),
+                    child: _buildJoystick('ELBOW / GRIP', Icons.precision_manufacturing_rounded, _leftJoyOffset, 
+                      (offset) => setState(() => _leftJoyOffset = offset),
+                      () => setState(() => _leftJoyOffset = Offset.zero)
+                    ),
                   ),
                 ),
                 
-                // Right Joystick (Arm / Camera Pan-Tilt)
+                // Right Joystick (Base / Shoulder)
                 Positioned(
                   right: 40, bottom: 32,
                   child: SlideFade(
                     animation: _animController,
                     delay: 0.3,
-                    child: _buildJoystick('CAMERA / ARM', Icons.control_camera_rounded),
+                    child: _buildJoystick('BASE / SHOULDER', Icons.control_camera_rounded, _rightJoyOffset,
+                      (offset) => setState(() => _rightJoyOffset = offset),
+                      () => setState(() => _rightJoyOffset = Offset.zero)
+                    ),
                   ),
                 ),
                 
@@ -220,7 +281,7 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
     );
   }
 
-  Widget _buildJoystick(String label, IconData icon) {
+  Widget _buildJoystick(String label, IconData icon, Offset offset, ValueChanged<Offset> onChanged, VoidCallback onEnd) {
     return Column(
       children: [
         Row(
@@ -232,34 +293,47 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
           ],
         ),
         const SizedBox(height: 16),
-        Container(
-          width: 150, height: 150,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: 0.5),
-            border: Border.all(color: Colors.white, width: 3),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 20, offset: const Offset(0, 10)),
-            ]
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Container(
-                width: 70, height: 70,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(color: const Color(0xFF155EEF).withValues(alpha: 0.2), blurRadius: 15, offset: const Offset(0, 8)),
-                  ],
-                  border: Border.all(color: const Color(0xFFF1F5F9), width: 2),
+        GestureDetector(
+          onPanUpdate: (details) {
+            Offset newOffset = offset + details.delta;
+            if (newOffset.distance > 40) {
+              newOffset = Offset.fromDirection(newOffset.direction, 40);
+            }
+            onChanged(newOffset);
+          },
+          onPanEnd: (_) => onEnd(),
+          child: Container(
+            width: 150, height: 150,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withValues(alpha: 0.5),
+              border: Border.all(color: Colors.white, width: 3),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 20, offset: const Offset(0, 10)),
+              ]
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Transform.translate(
+                  offset: offset,
+                  child: Container(
+                    width: 70, height: 70,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(color: const Color(0xFF155EEF).withValues(alpha: 0.2), blurRadius: 15, offset: const Offset(0, 8)),
+                      ],
+                      border: Border.all(color: const Color(0xFFF1F5F9), width: 2),
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.drag_indicator_rounded, color: Color(0xFF155EEF), size: 28),
+                    ),
+                  ),
                 ),
-                child: const Center(
-                  child: Icon(Icons.drag_indicator_rounded, color: Color(0xFF155EEF), size: 28),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
@@ -292,13 +366,13 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
                 ],
               ),
               const SizedBox(height: 24),
-              _buildSlider('Base', _j1, (v) => setState(() => _j1 = v)),
+              _buildSlider('Base', _j1, (v) { setState(() => _j1 = v); _bleService.sendJointCommand(0, v); }),
               const SizedBox(height: 16),
-              _buildSlider('Shoulder', _j2, (v) => setState(() => _j2 = v)),
+              _buildSlider('Shoulder', _j2, (v) { setState(() => _j2 = v); _bleService.sendJointCommand(1, v); }),
               const SizedBox(height: 16),
-              _buildSlider('Elbow', _j3, (v) => setState(() => _j3 = v)),
+              _buildSlider('Elbow', _j3, (v) { setState(() => _j3 = v); _bleService.sendJointCommand(2, v); }),
               const SizedBox(height: 16),
-              _buildSlider('Wrist', _j4, (v) => setState(() => _j4 = v)),
+              _buildSlider('Wrist', _j4, (v) { setState(() => _j4 = v); }), // Firmware doesn't support wrist yet
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -321,8 +395,16 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
   }
 
   Widget _buildGripperButton(String label, IconData icon, bool active) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    return GestureDetector(
+      onTap: () {
+        if (label == 'OPEN') {
+          _bleService.sendJointCommand(3, 70); // Min Angle
+        } else if (label == 'CLOSE') {
+          _bleService.sendJointCommand(3, 100); // Max Angle
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: active ? const Color(0xFF155EEF) : const Color(0xFFEEF2F6),
         borderRadius: BorderRadius.circular(20),
@@ -334,6 +416,7 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
           Text(label, style: TextStyle(color: active ? Colors.white : const Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.bold)),
         ],
       ),
+    ),
     );
   }
 
@@ -381,8 +464,14 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildToggleOption('BLE', Icons.bluetooth_rounded, _activeNetwork == 'BLE', () => setState(() => _activeNetwork = 'BLE')),
-          _buildToggleOption('NET', Icons.wifi_rounded, _activeNetwork == 'NET', () => setState(() => _activeNetwork = 'NET')),
+          _buildToggleOption('BLE', Icons.bluetooth_rounded, _activeNetwork == 'BLE', () {
+            setState(() => _activeNetwork = 'BLE');
+            _bleService.connect();
+          }),
+          _buildToggleOption('NET', Icons.wifi_rounded, _activeNetwork == 'NET', () {
+            setState(() => _activeNetwork = 'NET');
+            _bleService.disconnect();
+          }),
         ],
       ),
     );
