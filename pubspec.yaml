@@ -38,7 +38,8 @@ dependencies:
   dio: ^5.4.3+1
   flutter_blue_plus: ^1.31.13
   fl_chart: ^0.68.0
-  lucide_icons: ^0.43.0 # using a known stable version or just use lucide_icons: any
+  permission_handler: ^12.0.3
+  lucide_icons_flutter: ^3.1.14+2
 
 
 dev_dependencies:
