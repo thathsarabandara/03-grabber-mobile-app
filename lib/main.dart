@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/screens/onboarding_screen.dart';
 import 'features/auth/screens/welcome_screen.dart';
@@ -145,11 +146,26 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     super.initState();
     _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500));
     _animController.forward();
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        context.go('/onboarding');
-      }
-    });
+    _requestPermissionsAndNavigate();
+  }
+
+  Future<void> _requestPermissionsAndNavigate() async {
+    // Wait briefly to let the splash animation start
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    // Request permissions up front
+    await [
+      Permission.bluetoothScan,
+      Permission.bluetoothConnect,
+      Permission.locationWhenInUse,
+    ].request();
+
+    // Ensure the splash screen stays for a bit
+    await Future.delayed(const Duration(milliseconds: 2000));
+
+    if (mounted) {
+      context.go('/onboarding');
+    }
   }
 
   @override
