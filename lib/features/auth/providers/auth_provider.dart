@@ -1,11 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'auth_repository.dart';
+import '../../profile/services/profile_service.dart';
 
 final authRepositoryProvider = Provider((ref) => AuthRepository());
+final profileServiceProvider = Provider((ref) => ProfileService());
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  return AuthNotifier(ref.read(authRepositoryProvider));
+  return AuthNotifier(ref.read(authRepositoryProvider), ref.read(profileServiceProvider));
 });
 
 class AuthState {
@@ -28,9 +30,10 @@ class AuthState {
 
 class AuthNotifier extends StateNotifier<AuthState> {
   final AuthRepository _repository;
+  final ProfileService _profileService;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  AuthNotifier(this._repository) : super(AuthState()) {
+  AuthNotifier(this._repository, this._profileService) : super(AuthState()) {
     _loadToken();
   }
 
@@ -44,7 +47,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> fetchUser() async {
     try {
-      final user = await _repository.getMe();
+      final user = await _profileService.getMe();
       state = state.copyWith(user: user);
     } catch (e) {
       // Token might be invalid or expired
@@ -144,7 +147,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<bool> uploadProfileImage(String filePath) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final user = await _repository.uploadProfileImage(filePath);
+      final user = await _profileService.uploadProfileImage(filePath);
       state = state.copyWith(user: user, isLoading: false);
       return true;
     } catch (e) {
@@ -156,7 +159,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<bool> revokeAllSessions() async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      await _repository.revokeAllSessions();
+      await _profileService.revokeAllSessions();
       state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {
@@ -168,7 +171,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<List<Map<String, dynamic>>> getSessions() async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final sessions = await _repository.getSessions();
+      final sessions = await _profileService.getSessions();
       state = state.copyWith(isLoading: false);
       return sessions;
     } catch (e) {
@@ -180,7 +183,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<bool> revokeSession(String sessionId) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      await _repository.revokeSession(sessionId);
+      await _profileService.revokeSession(sessionId);
       state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {
@@ -192,7 +195,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<bool> updateProfile({required String firstName, required String lastName, String? phone}) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final user = await _repository.updateProfile(firstName: firstName, lastName: lastName, phone: phone);
+      final user = await _profileService.updateProfile(firstName: firstName, lastName: lastName, phone: phone);
       state = state.copyWith(user: user, isLoading: false);
       return true;
     } catch (e) {
@@ -204,7 +207,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<bool> changePassword(String oldPassword, String newPassword) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      await _repository.changePassword(oldPassword: oldPassword, newPassword: newPassword);
+      await _profileService.changePassword(oldPassword: oldPassword, newPassword: newPassword);
       state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {
