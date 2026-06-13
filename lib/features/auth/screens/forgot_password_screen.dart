@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../widgets/premium_widgets.dart';
+import '../providers/auth_provider.dart';
 
-class ForgotPasswordScreen extends StatefulWidget {
+class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
 
   @override
-  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+  ConsumerState<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
-class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> with SingleTickerProviderStateMixin {
+class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   final _emailController = TextEditingController();
 
@@ -30,6 +32,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> with Single
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: Stack(
@@ -112,13 +116,28 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> with Single
                                         children: [
                                           _buildTextField(
                                             controller: _emailController,
-                                            label: 'Email',
-                                            hint: 'john.doe@example.com',
+                                            label: 'EMAIL ADDRESS',
+                                            hint: 'operator@grabber.local',
                                             icon: LucideIcons.mail,
                                           ),
                                           const SizedBox(height: 32),
                                           BouncingCard(
-                                            onTap: () => context.push('/reset-password'), // Navigate to Reset Password
+                                            onTap: () async {
+                                              if (_emailController.text.isEmpty) {
+                                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter an email address')));
+                                                return;
+                                              }
+                                              
+                                              final success = await ref.read(authProvider.notifier).forgotPassword(_emailController.text);
+                                              
+                                              if (success && mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reset link dispatched to your email!')));
+                                                context.go('/login');
+                                              } else if (mounted) {
+                                                final error = ref.read(authProvider).error;
+                                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error ?? 'Failed to send reset link')));
+                                              }
+                                            },
                                             child: Container(
                                               width: double.infinity,
                                               padding: const EdgeInsets.symmetric(vertical: 18),
@@ -127,7 +146,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> with Single
                                                 borderRadius: BorderRadius.circular(20),
                                                 boxShadow: [BoxShadow(color: const Color(0xFF155EEF).withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))],
                                               ),
-                                              child: const Center(child: Text('Send Reset Link', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800))),
+                                              child: Center(
+                                                child: authState.isLoading 
+                                                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                                  : const Text('Send Reset Link', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800))
+                                              ),
                                             ),
                                           ),
                                         ],
@@ -160,26 +183,29 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> with Single
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1D2939)),
+        Padding(
+          padding: const EdgeInsets.only(left: 4.0),
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.5),
+          ),
         ),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: TextFormField(
             controller: controller,
-            style: const TextStyle(color: Colors.black),
+            style: const TextStyle(color: Color(0xFF1D2939), fontSize: 14, fontWeight: FontWeight.w600),
             decoration: InputDecoration(
               filled: true,
               fillColor: Colors.transparent,
               hintText: hint,
-              hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
-              prefixIcon: Icon(icon, color: const Color(0xFF64748B)),
+              hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14, fontWeight: FontWeight.w500),
+              prefixIcon: Icon(icon, color: const Color(0xFF94A3B8), size: 18),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             ),

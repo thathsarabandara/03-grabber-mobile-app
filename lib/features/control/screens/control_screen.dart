@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../widgets/premium_widgets.dart';
+import '../../robots/services/robot_service.dart';
 
 class ControlScreen extends StatefulWidget {
   const ControlScreen({super.key});
@@ -12,18 +13,40 @@ class ControlScreen extends StatefulWidget {
 
 class _ControlScreenState extends State<ControlScreen> with TickerProviderStateMixin {
   late AnimationController _animController;
+  final RobotService _robotService = RobotService();
+  List<dynamic> _cloudRobots = [];
+  String? _selectedRobotId;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
     _animController.forward();
+    _fetchRobots();
     
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
     ]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  }
+
+  Future<void> _fetchRobots() async {
+    try {
+      final robots = await _robotService.getRobots();
+      if (mounted) {
+        setState(() {
+          _cloudRobots = robots;
+          if (_cloudRobots.isNotEmpty) {
+            _selectedRobotId = _cloudRobots.first['id'];
+          }
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -69,6 +92,55 @@ class _ControlScreenState extends State<ControlScreen> with TickerProviderStateM
                         ),
                       ),
                     ],
+                  ),
+                ),
+                
+                // Robot Selector
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 0.5),
+                    ),
+                    child: _isLoading 
+                        ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _selectedRobotId,
+                              dropdownColor: const Color(0xFF0F172A),
+                              icon: const Icon(Icons.unfold_more_rounded, color: Colors.white70),
+                              isExpanded: true,
+                              hint: const Text('Select Robot', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                              items: _cloudRobots.map((r) {
+                                final isOnline = r['status']?.toString().toLowerCase() == 'online' || r['status']?.toString().toLowerCase() == 'active';
+                                return DropdownMenuItem<String>(
+                                  value: r['id'],
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 6, height: 6,
+                                        decoration: BoxDecoration(
+                                          color: isOnline ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        r['name'] ?? 'Robot ${r['robot_id']}',
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (val) {
+                                if (val != null) setState(() => _selectedRobotId = val);
+                              },
+                            ),
+                          ),
                   ),
                 ),
                 
@@ -122,36 +194,35 @@ class _ControlScreenState extends State<ControlScreen> with TickerProviderStateM
     return BouncingCard(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(32),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 20, offset: const Offset(0, 10))],
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
         ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(16),
               ),
-              child: Icon(icon, color: color, size: 40),
+              child: Icon(icon, color: color, size: 24),
             ),
-            const SizedBox(width: 24),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF1D2939), letterSpacing: -0.5)),
-                  const SizedBox(height: 8),
-                  Text(description, style: const TextStyle(fontSize: 14, color: Color(0xFF64748B), height: 1.4)),
+                  Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1D2939), letterSpacing: -0.5)),
+                  const SizedBox(height: 4),
+                  Text(description, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFFCBD5E1), size: 20),
+            const Icon(Icons.chevron_right_rounded, color: Color(0xFFCBD5E1), size: 24),
           ],
         ),
       ),

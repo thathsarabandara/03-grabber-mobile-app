@@ -9,7 +9,6 @@ import 'features/auth/screens/login_screen.dart';
 import 'features/auth/screens/register_screen.dart';
 import 'features/auth/screens/otp_screen.dart';
 import 'features/auth/screens/forgot_password_screen.dart';
-import 'features/auth/screens/reset_password_screen.dart';
 import 'features/dashboard/screens/main_shell.dart';
 import 'features/dashboard/screens/dashboard_screen.dart';
 import 'features/dashboard/screens/notification_details_screen.dart';
@@ -19,6 +18,9 @@ import 'features/control/screens/manual_control_screen.dart';
 import 'features/control/screens/ai_control_screen.dart';
 import 'features/media/screens/media_screen.dart';
 import 'features/profile/screens/profile_screen.dart';
+import 'features/profile/screens/edit_profile_screen.dart';
+import 'features/profile/screens/sessions_screen.dart';
+import 'features/profile/screens/change_password_screen.dart';
 import 'widgets/premium_widgets.dart';
 
 void main() {
@@ -51,15 +53,11 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/otp',
-        builder: (context, state) => const OtpScreen(),
+        builder: (context, state) => OtpScreen(email: state.extra as String? ?? ''),
       ),
       GoRoute(
         path: '/forgot-password',
         builder: (context, state) => const ForgotPasswordScreen(),
-      ),
-      GoRoute(
-        path: '/reset-password',
-        builder: (context, state) => const ResetPasswordScreen(),
       ),
       ShellRoute(
         builder: (context, state, child) {
@@ -87,6 +85,18 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const ProfileScreen(),
           ),
         ],
+      ),
+      GoRoute(
+        path: '/edit-profile',
+        builder: (context, state) => const EditProfileScreen(),
+      ),
+      GoRoute(
+        path: '/sessions',
+        builder: (context, state) => const SessionsScreen(),
+      ),
+      GoRoute(
+        path: '/change-password',
+        builder: (context, state) => const ChangePasswordScreen(),
       ),
       GoRoute(
         path: '/ai-control',
