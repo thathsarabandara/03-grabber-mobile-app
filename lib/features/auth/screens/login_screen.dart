@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../widgets/premium_widgets.dart';
+import '../providers/auth_provider.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -33,6 +35,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: Stack(
@@ -117,14 +121,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                         children: [
                                           _buildTextField(
                                             controller: _emailController,
-                                            label: 'Email',
-                                            hint: 'john.doe@example.com',
+                                            label: 'EMAIL ADDRESS',
+                                            hint: 'operator@grabber.local',
                                             icon: LucideIcons.mail,
                                           ),
                                           const SizedBox(height: 24),
                                           _buildTextField(
                                             controller: _passwordController,
-                                            label: 'Password',
+                                            label: 'PASSWORD',
                                             hint: '••••••••',
                                             icon: LucideIcons.lock,
                                             isPassword: true,
@@ -142,7 +146,22 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                           ),
                                           const SizedBox(height: 32),
                                           BouncingCard(
-                                            onTap: () => context.go('/dashboard'),
+                                            onTap: () async {
+                                              if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+                                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all fields')));
+                                                return;
+                                              }
+                                              final success = await ref.read(authProvider.notifier).login(
+                                                _emailController.text,
+                                                _passwordController.text,
+                                              );
+                                              if (success && mounted) {
+                                                context.go('/dashboard');
+                                              } else if (mounted) {
+                                                final error = ref.read(authProvider).error;
+                                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error ?? 'Login failed')));
+                                              }
+                                            },
                                             child: Container(
                                               width: double.infinity,
                                               padding: const EdgeInsets.symmetric(vertical: 18),
@@ -151,7 +170,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                                 borderRadius: BorderRadius.circular(20),
                                                 boxShadow: [BoxShadow(color: const Color(0xFF155EEF).withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))],
                                               ),
-                                              child: const Center(child: Text('Login', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800))),
+                                              child: Center(
+                                                child: authState.isLoading 
+                                                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                                  : const Text('Login', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800))
+                                              ),
                                             ),
                                           ),
                                           const SizedBox(height: 24),
@@ -196,32 +219,36 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1D2939)),
+        Padding(
+          padding: const EdgeInsets.only(left: 4.0),
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.5),
+          ),
         ),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: TextFormField(
             controller: controller,
-            style: const TextStyle(color: Colors.black),
+            style: const TextStyle(color: Color(0xFF1D2939), fontSize: 14, fontWeight: FontWeight.w600),
             obscureText: isPassword && _obscurePassword,
             decoration: InputDecoration(
               filled: true,
               fillColor: Colors.transparent,
               hintText: hint,
-              hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
-              prefixIcon: Icon(icon, color: const Color(0xFF64748B)),
+              hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14, fontWeight: FontWeight.w500),
+              prefixIcon: Icon(icon, color: const Color(0xFF94A3B8), size: 18),
               suffixIcon: isPassword
                   ? IconButton(
                       icon: Icon(
                         _obscurePassword ? LucideIcons.eyeOff : LucideIcons.eye,
-                        color: const Color(0xFF64748B),
+                        color: const Color(0xFF94A3B8),
+                        size: 18,
                       ),
                       onPressed: () {
                         setState(() {

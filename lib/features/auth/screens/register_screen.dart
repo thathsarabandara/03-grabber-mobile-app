@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../widgets/premium_widgets.dart';
+import '../providers/auth_provider.dart';
 
-class RegisterScreen extends StatefulWidget {
+class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
 
   @override
-  State<RegisterScreen> createState() => _RegisterScreenState();
+  ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProviderStateMixin {
+class _RegisterScreenState extends ConsumerState<RegisterScreen> with SingleTickerProviderStateMixin {
   late AnimationController _animController;
-  final _nameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _passwordConfirmController = TextEditingController();
   bool _obscurePassword = true;
@@ -29,8 +33,10 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
   @override
   void dispose() {
     _animController.dispose();
-    _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     _passwordConfirmController.dispose();
     super.dispose();
@@ -38,6 +44,8 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: Stack(
@@ -119,38 +127,92 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          _buildTextField(
-                                            controller: _nameController,
-                                            label: 'Full Name',
-                                            hint: 'John Doe',
-                                            icon: LucideIcons.user,
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: _buildTextField(
+                                                  controller: _firstNameController,
+                                                  label: 'FIRST NAME',
+                                                  hint: 'John',
+                                                  icon: LucideIcons.user,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 16),
+                                              Expanded(
+                                                child: _buildTextField(
+                                                  controller: _lastNameController,
+                                                  label: 'LAST NAME',
+                                                  hint: 'Doe',
+                                                  icon: LucideIcons.user,
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                          const SizedBox(height: 24),
+                                          const SizedBox(height: 20),
                                           _buildTextField(
                                             controller: _emailController,
-                                            label: 'Email',
-                                            hint: 'john.doe@example.com',
+                                            label: 'EMAIL ADDRESS',
+                                            hint: 'operator@grabber.local',
                                             icon: LucideIcons.mail,
                                           ),
-                                          const SizedBox(height: 24),
+                                          const SizedBox(height: 20),
                                           _buildTextField(
-                                            controller: _passwordController,
-                                            label: 'Password',
-                                            hint: '••••••••',
-                                            icon: LucideIcons.lock,
-                                            isPassword: true,
+                                            controller: _phoneController,
+                                            label: 'PHONE NUMBER',
+                                            hint: '+1 (555) 000-0000',
+                                            icon: LucideIcons.phone,
                                           ),
-                                          const SizedBox(height: 24),
-                                          _buildTextField(
-                                            controller: _passwordConfirmController,
-                                            label: 'Confirm Password',
-                                            hint: '••••••••',
-                                            icon: LucideIcons.lock,
-                                            isPassword: true,
+                                          const SizedBox(height: 20),
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: _buildTextField(
+                                                  controller: _passwordController,
+                                                  label: 'PASSWORD',
+                                                  hint: '••••••••',
+                                                  icon: LucideIcons.lock,
+                                                  isPassword: true,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 16),
+                                              Expanded(
+                                                child: _buildTextField(
+                                                  controller: _passwordConfirmController,
+                                                  label: 'CONFIRM',
+                                                  hint: '••••••••',
+                                                  icon: LucideIcons.lock,
+                                                  isPassword: true,
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                           const SizedBox(height: 32),
                                           BouncingCard(
-                                            onTap: () => context.go('/otp'), // Navigate to OTP
+                                            onTap: () async {
+                                              if (_emailController.text.isEmpty || _passwordController.text.isEmpty || _firstNameController.text.isEmpty || _lastNameController.text.isEmpty) {
+                                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all required fields')));
+                                                return;
+                                              }
+                                              if (_passwordController.text != _passwordConfirmController.text) {
+                                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Passwords do not match')));
+                                                return;
+                                              }
+                                              
+                                              final success = await ref.read(authProvider.notifier).register(
+                                                firstName: _firstNameController.text.trim(),
+                                                lastName: _lastNameController.text.trim(),
+                                                email: _emailController.text.trim(),
+                                                password: _passwordController.text,
+                                                phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+                                              );
+                                              
+                                              if (success && mounted) {
+                                                context.go('/otp', extra: _emailController.text);
+                                              } else if (mounted) {
+                                                final error = ref.read(authProvider).error;
+                                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error ?? 'Registration failed')));
+                                              }
+                                            },
                                             child: Container(
                                               width: double.infinity,
                                               padding: const EdgeInsets.symmetric(vertical: 18),
@@ -159,7 +221,11 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                                                 borderRadius: BorderRadius.circular(20),
                                                 boxShadow: [BoxShadow(color: const Color(0xFF155EEF).withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))],
                                               ),
-                                              child: const Center(child: Text('Sign Up', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800))),
+                                              child: Center(
+                                                child: authState.isLoading 
+                                                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                                  : const Text('Sign Up', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800))
+                                              ),
                                             ),
                                           ),
                                           const SizedBox(height: 24),
@@ -204,32 +270,36 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1D2939)),
+        Padding(
+          padding: const EdgeInsets.only(left: 4.0),
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.5),
+          ),
         ),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: TextFormField(
             controller: controller,
-            style: const TextStyle(color: Colors.black),
+            style: const TextStyle(color: Color(0xFF1D2939), fontSize: 14, fontWeight: FontWeight.w600),
             obscureText: isPassword && _obscurePassword,
             decoration: InputDecoration(
               filled: true,
               fillColor: Colors.transparent,
               hintText: hint,
-              hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
-              prefixIcon: Icon(icon, color: const Color(0xFF64748B)),
+              hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14, fontWeight: FontWeight.w500),
+              prefixIcon: Icon(icon, color: const Color(0xFF94A3B8), size: 18),
               suffixIcon: isPassword
                   ? IconButton(
                       icon: Icon(
                         _obscurePassword ? LucideIcons.eyeOff : LucideIcons.eye,
-                        color: const Color(0xFF64748B),
+                        color: const Color(0xFF94A3B8),
+                        size: 18,
                       ),
                       onPressed: () {
                         setState(() {

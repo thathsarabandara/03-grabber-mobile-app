@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../widgets/premium_widgets.dart';
+import '../providers/auth_provider.dart';
 
-class OtpScreen extends StatefulWidget {
-  const OtpScreen({super.key});
+class OtpScreen extends ConsumerStatefulWidget {
+  final String email;
+  const OtpScreen({super.key, required this.email});
 
   @override
-  State<OtpScreen> createState() => _OtpScreenState();
+  ConsumerState<OtpScreen> createState() => _OtpScreenState();
 }
 
-class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMixin {
+class _OtpScreenState extends ConsumerState<OtpScreen> with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   final _otpController = TextEditingController();
 
@@ -30,6 +33,8 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: Stack(
@@ -112,13 +117,31 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
                                         children: [
                                           _buildTextField(
                                             controller: _otpController,
-                                            label: 'OTP Code',
+                                            label: 'OTP CODE',
                                             hint: '123456',
                                             icon: LucideIcons.key,
                                           ),
                                           const SizedBox(height: 32),
                                           BouncingCard(
-                                            onTap: () => context.go('/dashboard'),
+                                            onTap: () async {
+                                              if (_otpController.text.length < 6) {
+                                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter 6-digit OTP')));
+                                                return;
+                                              }
+                                              
+                                              final success = await ref.read(authProvider.notifier).verifyOtp(
+                                                widget.email,
+                                                _otpController.text,
+                                              );
+                                              
+                                              if (success && mounted) {
+                                                context.go('/login');
+                                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Verified successfully! Please login.')));
+                                              } else if (mounted) {
+                                                final error = ref.read(authProvider).error;
+                                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error ?? 'OTP verification failed')));
+                                              }
+                                            },
                                             child: Container(
                                               width: double.infinity,
                                               padding: const EdgeInsets.symmetric(vertical: 18),
@@ -127,7 +150,11 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
                                                 borderRadius: BorderRadius.circular(20),
                                                 boxShadow: [BoxShadow(color: const Color(0xFF155EEF).withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))],
                                               ),
-                                              child: const Center(child: Text('Verify & Continue', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800))),
+                                              child: Center(
+                                                child: authState.isLoading 
+                                                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                                  : const Text('Verify & Continue', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800))
+                                              ),
                                             ),
                                           ),
                                           const SizedBox(height: 24),
@@ -136,7 +163,14 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
                                             children: [
                                               const Text("Didn't receive code?", style: TextStyle(color: Color(0xFF64748B))),
                                               TextButton(
-                                                onPressed: () {}, // Resend action
+                                                onPressed: () async {
+                                                  final success = await ref.read(authProvider.notifier).resendOtp(widget.email);
+                                                  if (mounted) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                                      content: Text(success ? 'OTP resent!' : (ref.read(authProvider).error ?? 'Failed to resend')),
+                                                    ));
+                                                  }
+                                                },
                                                 child: const Text('Resend', style: TextStyle(color: Color(0xFF155EEF), fontWeight: FontWeight.bold)),
                                               ),
                                             ],
@@ -171,20 +205,23 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1D2939)),
+        Padding(
+          padding: const EdgeInsets.only(left: 4.0),
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.5),
+          ),
         ),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: TextFormField(
             controller: controller,
-            style: const TextStyle(color: Colors.black, letterSpacing: 8, fontSize: 24, fontWeight: FontWeight.bold),
+            style: const TextStyle(color: Color(0xFF1D2939), letterSpacing: 8, fontSize: 24, fontWeight: FontWeight.bold),
             textAlign: TextAlign.center,
             keyboardType: TextInputType.number,
             maxLength: 6,
