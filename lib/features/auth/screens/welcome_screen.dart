@@ -114,14 +114,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                     ),
                   ),
                   const Spacer(),
-                  SlideFade(
-                    animation: _animController,
-                    delay: 0.5,
-                    child: TextButton(
-                      onPressed: () => context.go('/dashboard'),
-                      child: const Text('Continue as Guest', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
-                    ),
-                  ),
                 ],
               ),
             ),
