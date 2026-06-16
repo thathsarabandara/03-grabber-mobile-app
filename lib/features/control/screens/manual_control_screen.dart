@@ -1,13 +1,18 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/network/api_client.dart';
+import '../../robots/services/robot_service.dart';
 import '../../../widgets/premium_widgets.dart';
 import '../services/ble_service.dart';
 
 class ManualControlScreen extends StatefulWidget {
-  const ManualControlScreen({super.key});
+  final String? robotId;
+  const ManualControlScreen({super.key, this.robotId});
 
   @override
   State<ManualControlScreen> createState() => _ManualControlScreenState();
@@ -18,6 +23,15 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
   bool _showJointPanel = false;
   
   final BleService _bleService = BleService();
+  final RobotService _robotService = RobotService();
+
+  // Robot mapping & status
+  String? _robotDbId;
+  String? _robotStrId;
+  String _robotStatus = 'OFFLINE';
+  WebSocket? _webSocket;
+  double _velocity = 50.0;
+  DateTime? _lastInternetSendTime;
 
   // Joystick Offsets
   Offset _leftJoyOffset = Offset.zero;
@@ -50,6 +64,8 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     });
 
+    _fetchAndSelectRobot();
+
     if (_activeNetwork == 'BLE') {
       _bleService.connect();
     }
@@ -58,8 +74,88 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
     _joystickTimer = Timer.periodic(const Duration(milliseconds: 50), (_) => _processJoystickInput());
   }
 
+  Future<void> _fetchAndSelectRobot() async {
+    try {
+      final robots = await _robotService.getRobots();
+      if (mounted) {
+        setState(() {
+          final match = robots.firstWhere(
+            (r) => r['id'] == widget.robotId || r['robot_id'] == widget.robotId,
+            orElse: () => robots.isNotEmpty ? robots.first : null,
+          );
+
+          if (match != null) {
+            _robotDbId = match['id'];
+            _robotStrId = match['robot_id'];
+            _robotStatus = match['status'] ?? 'OFFLINE';
+          }
+        });
+        
+        if (_activeNetwork == 'NET') {
+          _connectWebSocket();
+        }
+      }
+    } catch (e) {
+      print("Error fetching robot in ManualControl: $e");
+    }
+  }
+
+  void _connectWebSocket() {
+    _webSocket?.close();
+    _webSocket = null;
+    
+    final wsUrl = ApiClient.baseUrl.replaceFirst('http', 'ws') + '/robots/ws';
+    print("[WS] Connecting to: $wsUrl");
+    
+    WebSocket.connect(wsUrl).then((ws) {
+      if (!mounted) {
+        ws.close();
+        return;
+      }
+      
+      _webSocket = ws;
+      print("[WS] Connected to gateway.");
+      
+      ws.listen(
+        (data) {
+          try {
+            final message = jsonDecode(data);
+            print("[WS Message]: $message");
+            if (message['robotId'] == _robotStrId && mounted) {
+              setState(() {
+                _robotStatus = message['status'] ?? 'OFFLINE';
+              });
+            }
+          } catch (e) {
+            print("[WS] JSON parse error: $e");
+          }
+        },
+        onError: (err) {
+          print("[WS] Error: $err");
+          _reconnectWebSocket();
+        },
+        onDone: () {
+          print("[WS] Connection closed.");
+          _reconnectWebSocket();
+        },
+      );
+    }).catchError((err) {
+      print("[WS] Connection failed: $err");
+      _reconnectWebSocket();
+    });
+  }
+
+  void _reconnectWebSocket() {
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted && _activeNetwork == 'NET') {
+        _connectWebSocket();
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _webSocket?.close();
     _joystickTimer?.cancel();
     _animController.dispose();
     // Restore default orientations
@@ -78,14 +174,15 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
     _isProcessingJoystick = true;
 
     bool sendJ1 = false, sendJ2 = false, sendJ3 = false, sendJ4 = false;
+    double maxChange = (_velocity / 100.0) * 4.0; // up to 4 degrees per tick at 100% velocity
 
     // Right Joystick: Base (dx) & Shoulder (dy)
     if (_rightJoyOffset != Offset.zero) {
       double dx = _rightJoyOffset.dx / 40.0; // range: -1 to +1
       double dy = _rightJoyOffset.dy / 40.0; // range: -1 to +1
 
-      double newJ1 = (_j1 + (dx * 2.0)).clamp(1.0, 180.0);
-      double newJ2 = (_j2 - (dy * 2.0)).clamp(40.0, 120.0); // Invert so Up = Forward
+      double newJ1 = (_j1 + (dx * maxChange)).clamp(1.0, 180.0);
+      double newJ2 = (_j2 - (dy * maxChange)).clamp(40.0, 120.0); // Invert so Up = Forward
 
       if ((newJ1 - _j1).abs() > 0.1) { _j1 = newJ1; sendJ1 = true; }
       if ((newJ2 - _j2).abs() > 0.1) { _j2 = newJ2; sendJ2 = true; }
@@ -96,8 +193,8 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
       double dx = _leftJoyOffset.dx / 40.0; // range: -1 to +1
       double dy = _leftJoyOffset.dy / 40.0; // range: -1 to +1
       
-      double newJ4 = (_j4 + (dx * 2.0)).clamp(70.0, 100.0); // Left/Right for Grip
-      double newJ3 = (_j3 - (dy * 2.0)).clamp(20.0, 80.0); // Invert so Up = Forward
+      double newJ4 = (_j4 + (dx * maxChange)).clamp(70.0, 100.0); // Left/Right for Grip
+      double newJ3 = (_j3 - (dy * maxChange)).clamp(20.0, 80.0); // Invert so Up = Forward
       
       if ((newJ3 - _j3).abs() > 0.1) { _j3 = newJ3; sendJ3 = true; }
       if ((newJ4 - _j4).abs() > 0.1) { _j4 = newJ4; sendJ4 = true; }
@@ -105,9 +202,104 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
 
     if (sendJ1 || sendJ2 || sendJ3 || sendJ4) {
       setState(() {});
-      await _bleService.sendAllJointsCommand(_j1, _j2, _j3, _j4);
+      if (_activeNetwork == 'BLE') {
+        await _bleService.sendAllJointsCommand(_j1, _j2, _j3, _j4);
+      } else if (_activeNetwork == 'NET') {
+        _sendInternetJointsThrottled(sendJ1, sendJ2, sendJ3, sendJ4);
+      }
     }
     _isProcessingJoystick = false;
+  }
+
+  void _sendInternetJointsThrottled(bool sendJ1, bool sendJ2, bool sendJ3, bool sendJ4) {
+    final now = DateTime.now();
+    if (_lastInternetSendTime == null || now.difference(_lastInternetSendTime!) >= const Duration(milliseconds: 150)) {
+      _lastInternetSendTime = now;
+      
+      final dbId = _robotDbId;
+      if (dbId == null) return;
+
+      if (sendJ1) _robotService.sendMoveJointCommand(dbId, 'j1', _j1).catchError((_) {});
+      if (sendJ2) _robotService.sendMoveJointCommand(dbId, 'j2', _j2).catchError((_) {});
+      if (sendJ3) _robotService.sendMoveJointCommand(dbId, 'j3', _j3).catchError((_) {});
+      if (sendJ4) _robotService.sendMoveJointCommand(dbId, 'j4', _j4).catchError((_) {});
+    }
+  }
+
+  Future<void> _sendJointMoveCommand(String jointName, int servoIdx, double val) async {
+    if (_activeNetwork == 'BLE') {
+      await _bleService.sendJointCommand(servoIdx, val);
+    } else if (_activeNetwork == 'NET') {
+      final dbId = _robotDbId;
+      if (dbId != null) {
+        try {
+          await _robotService.sendMoveJointCommand(dbId, jointName, val);
+        } catch (e) {
+          print("Error moving joint: $e");
+        }
+      }
+    }
+  }
+
+  Future<void> _handleHome() async {
+    if (_activeNetwork == 'BLE') {
+      setState(() {
+        _j1 = 90;
+        _j2 = 90;
+        _j3 = 50;
+        _j4 = 90;
+      });
+      await _bleService.sendAllJointsCommand(90, 90, 50, 90);
+    } else if (_activeNetwork == 'NET') {
+      final dbId = _robotDbId;
+      if (dbId != null) {
+        try {
+          await _robotService.sendHomeCommand(dbId);
+          setState(() {
+            _j1 = 90;
+            _j2 = 90;
+            _j3 = 50;
+            _j4 = 90;
+          });
+        } catch (e) {
+          print("Error homing robot: $e");
+        }
+      }
+    }
+  }
+
+  Future<void> _handleEmergencyStop() async {
+    if (_activeNetwork == 'BLE') {
+      setState(() {
+        _robotStatus = 'EMERGENCY_STOP';
+      });
+    } else if (_activeNetwork == 'NET') {
+      final dbId = _robotDbId;
+      if (dbId != null) {
+        try {
+          await _robotService.sendEmergencyStopCommand(dbId);
+        } catch (e) {
+          print("Error triggering E-Stop: $e");
+        }
+      }
+    }
+  }
+
+  Future<void> _handleClearEstop() async {
+    if (_activeNetwork == 'BLE') {
+      setState(() {
+        _robotStatus = 'IDLE';
+      });
+    } else if (_activeNetwork == 'NET') {
+      final dbId = _robotDbId;
+      if (dbId != null) {
+        try {
+          await _robotService.sendClearEmergencyStopCommand(dbId);
+        } catch (e) {
+          print("Error clearing E-Stop: $e");
+        }
+      }
+    }
   }
 
   @override
@@ -136,9 +328,41 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
                           children: [
                             _buildHeaderIconButton(Icons.arrow_back_ios_new_rounded, () => context.pop()),
                             const SizedBox(width: 16),
-                            const Text(
-                              'Live HUD',
-                              style: TextStyle(color: Color(0xFF1D2939), fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text(
+                                  'Live HUD',
+                                  style: TextStyle(color: Color(0xFF1D2939), fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+                                ),
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 8, height: 8,
+                                      decoration: BoxDecoration(
+                                        color: _robotStatus.toLowerCase() == 'emergency_stop' ? Colors.red :
+                                               _robotStatus.toLowerCase() == 'moving' ? Colors.blue :
+                                               _robotStatus.toLowerCase() == 'idle' ? Colors.green :
+                                               _robotStatus.toLowerCase() == 'offline' ? Colors.grey : Colors.orange,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Status: ${_robotStatus.toUpperCase()}',
+                                      style: TextStyle(
+                                        color: _robotStatus.toLowerCase() == 'emergency_stop' ? Colors.red.shade700 :
+                                               _robotStatus.toLowerCase() == 'moving' ? Colors.blue.shade700 :
+                                               _robotStatus.toLowerCase() == 'idle' ? Colors.green.shade700 : Colors.grey.shade600,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -189,11 +413,11 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _buildActionButton(Icons.videocam_rounded, const Color(0xFF155EEF), () {}),
+                        _buildActionButton(Icons.home_rounded, const Color(0xFF155EEF), _handleHome),
                         const SizedBox(width: 16),
-                        _buildActionButton(Icons.auto_awesome_rounded, const Color(0xFF8B5CF6), () {}),
+                        _buildActionButton(Icons.lock_open_rounded, const Color(0xFF64748B), _handleClearEstop),
                         const SizedBox(width: 16),
-                        _buildActionButton(Icons.warning_rounded, const Color(0xFFEF4444), () {}),
+                        _buildActionButton(Icons.warning_rounded, const Color(0xFFEF4444), _handleEmergencyStop),
                         const SizedBox(width: 16),
                         _buildActionButton(
                           _showJointPanel ? Icons.close_rounded : Icons.tune_rounded, 
@@ -354,40 +578,85 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
             border: Border.all(color: Colors.white, width: 2),
             boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 30, offset: const Offset(0, 10))],
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.precision_manufacturing_rounded, color: Color(0xFF155EEF), size: 24),
-                  SizedBox(width: 8),
-                  Text('Joint Controls', style: TextStyle(color: Color(0xFF1D2939), fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
-                ],
-              ),
-              const SizedBox(height: 24),
-              _buildSlider('Base', _j1, (v) { setState(() => _j1 = v); _bleService.sendJointCommand(0, v); }),
-              const SizedBox(height: 16),
-              _buildSlider('Shoulder', _j2, (v) { setState(() => _j2 = v); _bleService.sendJointCommand(1, v); }),
-              const SizedBox(height: 16),
-              _buildSlider('Elbow', _j3, (v) { setState(() => _j3 = v); _bleService.sendJointCommand(2, v); }),
-              const SizedBox(height: 16),
-              _buildSlider('Wrist', _j4, (v) { setState(() => _j4 = v); }), // Firmware doesn't support wrist yet
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Gripper', style: TextStyle(color: Color(0xFF64748B), fontSize: 14, fontWeight: FontWeight.w800)),
-                  Row(
-                    children: [
-                      _buildGripperButton('OPEN', Icons.radio_button_unchecked, false),
-                      const SizedBox(width: 8),
-                      _buildGripperButton('CLOSE', Icons.radio_button_checked, true),
-                    ],
-                  )
-                ],
-              )
-            ],
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.precision_manufacturing_rounded, color: Color(0xFF155EEF), size: 24),
+                    SizedBox(width: 8),
+                    Text('Joint Controls', style: TextStyle(color: Color(0xFF1D2939), fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                _buildSlider('Base', _j1, 1, 180, (v) {
+                  setState(() => _j1 = v);
+                  _sendJointMoveCommand('j1', 0, v);
+                }),
+                const SizedBox(height: 16),
+                _buildSlider('Shoulder', _j2, 40, 120, (v) {
+                  setState(() => _j2 = v);
+                  _sendJointMoveCommand('j2', 1, v);
+                }),
+                const SizedBox(height: 16),
+                _buildSlider('Elbow', _j3, 20, 80, (v) {
+                  setState(() => _j3 = v);
+                  _sendJointMoveCommand('j3', 2, v);
+                }),
+                const SizedBox(height: 16),
+                _buildSlider('Wrist', _j4, 70, 100, (v) {
+                  setState(() => _j4 = v);
+                  _sendJointMoveCommand('j4', 3, v);
+                }),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Gripper', style: TextStyle(color: Color(0xFF64748B), fontSize: 14, fontWeight: FontWeight.w800)),
+                    Row(
+                      children: [
+                        _buildGripperButton('OPEN', Icons.radio_button_unchecked, _j4 <= 75),
+                        const SizedBox(width: 8),
+                        _buildGripperButton('CLOSE', Icons.radio_button_checked, _j4 > 75),
+                      ],
+                    )
+                  ],
+                ),
+                const SizedBox(height: 24),
+                const Divider(color: Color(0xFFE2E8F0)),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Velocity Scale', style: TextStyle(color: Color(0xFF1D2939), fontSize: 14, fontWeight: FontWeight.w700)),
+                    Text('${_velocity.toInt()}%', style: const TextStyle(color: Color(0xFF155EEF), fontSize: 12, fontWeight: FontWeight.w900)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SliderTheme(
+                  data: SliderThemeData(
+                    trackHeight: 6,
+                    activeTrackColor: const Color(0xFF155EEF),
+                    inactiveTrackColor: const Color(0xFFEEF2F6),
+                    thumbColor: Colors.white,
+                    overlayColor: const Color(0xFF155EEF).withValues(alpha: 0.1),
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
+                  ),
+                  child: Slider(
+                    value: _velocity,
+                    min: 10,
+                    max: 100,
+                    divisions: 9,
+                    onChanged: (v) {
+                      setState(() => _velocity = v);
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -398,29 +667,31 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
     return GestureDetector(
       onTap: () {
         if (label == 'OPEN') {
-          _bleService.sendJointCommand(3, 70); // Min Angle
+          setState(() => _j4 = 70);
+          _sendJointMoveCommand('j4', 3, 70);
         } else if (label == 'CLOSE') {
-          _bleService.sendJointCommand(3, 100); // Max Angle
+          setState(() => _j4 = 100);
+          _sendJointMoveCommand('j4', 3, 100);
         }
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: active ? const Color(0xFF155EEF) : const Color(0xFFEEF2F6),
-        borderRadius: BorderRadius.circular(20),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFF155EEF) : const Color(0xFFEEF2F6),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: active ? Colors.white : const Color(0xFF64748B), size: 16),
+            const SizedBox(width: 4),
+            Text(label, style: TextStyle(color: active ? Colors.white : const Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.bold)),
+          ],
+        ),
       ),
-      child: Row(
-        children: [
-          Icon(icon, color: active ? Colors.white : const Color(0xFF64748B), size: 16),
-          const SizedBox(width: 4),
-          Text(label, style: TextStyle(color: active ? Colors.white : const Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.bold)),
-        ],
-      ),
-    ),
     );
   }
 
-  Widget _buildSlider(String label, double value, ValueChanged<double> onChanged) {
+  Widget _buildSlider(String label, double value, double min, double max, ValueChanged<double> onChanged) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -446,7 +717,7 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
             overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
           ),
-          child: Slider(value: value, min: 0, max: 180, onChanged: onChanged),
+          child: Slider(value: value, min: min, max: max, onChanged: onChanged),
         ),
       ],
     );
@@ -465,12 +736,20 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
         mainAxisSize: MainAxisSize.min,
         children: [
           _buildToggleOption('BLE', Icons.bluetooth_rounded, _activeNetwork == 'BLE', () {
-            setState(() => _activeNetwork = 'BLE');
+            setState(() {
+              _activeNetwork = 'BLE';
+              _robotStatus = 'OFFLINE';
+            });
+            _webSocket?.close();
+            _webSocket = null;
             _bleService.connect();
           }),
           _buildToggleOption('NET', Icons.wifi_rounded, _activeNetwork == 'NET', () {
-            setState(() => _activeNetwork = 'NET');
+            setState(() {
+              _activeNetwork = 'NET';
+            });
             _bleService.disconnect();
+            _connectWebSocket();
           }),
         ],
       ),

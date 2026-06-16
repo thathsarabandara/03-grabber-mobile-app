@@ -44,6 +44,45 @@ class RobotService {
     }
   }
 
+  Future<dynamic> sendMoveJointCommand(String robotId, String joint, double angle) async {
+    try {
+      final response = await _apiClient.dio.post('/robots/$robotId/commands/move-joint', data: {
+        'joint': joint,
+        'angle': angle,
+      });
+      return response.data;
+    } catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<dynamic> sendHomeCommand(String robotId) async {
+    try {
+      final response = await _apiClient.dio.post('/robots/$robotId/commands/home');
+      return response.data;
+    } catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<dynamic> sendEmergencyStopCommand(String robotId) async {
+    try {
+      final response = await _apiClient.dio.post('/robots/$robotId/commands/emergency-stop');
+      return response.data;
+    } catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<dynamic> sendClearEmergencyStopCommand(String robotId) async {
+    try {
+      final response = await _apiClient.dio.post('/robots/$robotId/commands/clear-emergency-stop');
+      return response.data;
+    } catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   String _handleError(dynamic error) {
     if (error is DioException) {
       if (error.response?.data != null && error.response!.data['detail'] != null) {
