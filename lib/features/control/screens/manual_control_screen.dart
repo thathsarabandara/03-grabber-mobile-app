@@ -41,8 +41,8 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
 
   // Joint Values (Aligned with Firmware Config.h)
   double _j1 = 90; // Base: min 1, max 180
-  double _j2 = 90; // Shoulder: min 40, max 120
-  double _j3 = 50; // Elbow: min 20, max 80
+  double _j2 = 100; // Shoulder: min 50, max 150
+  double _j3 = 60; // Elbow: min 20, max 100
   double _j4 = 90; // Gripper: min 70, max 100
 
   // Control Modes
@@ -182,7 +182,7 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
       double dy = _rightJoyOffset.dy / 40.0; // range: -1 to +1
 
       double newJ1 = (_j1 + (dx * maxChange)).clamp(1.0, 180.0);
-      double newJ2 = (_j2 - (dy * maxChange)).clamp(40.0, 120.0); // Invert so Up = Forward
+      double newJ2 = (_j2 - (dy * maxChange)).clamp(50.0, 150.0); // Invert so Up = Forward
 
       if ((newJ1 - _j1).abs() > 0.1) { _j1 = newJ1; sendJ1 = true; }
       if ((newJ2 - _j2).abs() > 0.1) { _j2 = newJ2; sendJ2 = true; }
@@ -194,7 +194,7 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
       double dy = _leftJoyOffset.dy / 40.0; // range: -1 to +1
       
       double newJ4 = (_j4 + (dx * maxChange)).clamp(70.0, 100.0); // Left/Right for Grip
-      double newJ3 = (_j3 - (dy * maxChange)).clamp(20.0, 80.0); // Invert so Up = Forward
+      double newJ3 = (_j3 - (dy * maxChange)).clamp(20.0, 100.0); // Invert so Up = Forward
       
       if ((newJ3 - _j3).abs() > 0.1) { _j3 = newJ3; sendJ3 = true; }
       if ((newJ4 - _j4).abs() > 0.1) { _j4 = newJ4; sendJ4 = true; }
@@ -245,11 +245,11 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
     if (_activeNetwork == 'BLE') {
       setState(() {
         _j1 = 90;
-        _j2 = 90;
-        _j3 = 50;
+        _j2 = 100;
+        _j3 = 60;
         _j4 = 90;
       });
-      await _bleService.sendAllJointsCommand(90, 90, 50, 90);
+      await _bleService.sendAllJointsCommand(90, 100, 60, 90);
     } else if (_activeNetwork == 'NET') {
       final dbId = _robotDbId;
       if (dbId != null) {
@@ -257,8 +257,8 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
           await _robotService.sendHomeCommand(dbId);
           setState(() {
             _j1 = 90;
-            _j2 = 90;
-            _j3 = 50;
+            _j2 = 100;
+            _j3 = 60;
             _j4 = 90;
           });
         } catch (e) {
@@ -596,12 +596,12 @@ class _ManualControlScreenState extends State<ManualControlScreen> with TickerPr
                   _sendJointMoveCommand('j1', 0, v);
                 }),
                 const SizedBox(height: 16),
-                _buildSlider('Shoulder', _j2, 40, 120, (v) {
+                _buildSlider('Shoulder', _j2, 50, 150, (v) {
                   setState(() => _j2 = v);
                   _sendJointMoveCommand('j2', 1, v);
                 }),
                 const SizedBox(height: 16),
-                _buildSlider('Elbow', _j3, 20, 80, (v) {
+                _buildSlider('Elbow', _j3, 20, 100, (v) {
                   setState(() => _j3 = v);
                   _sendJointMoveCommand('j3', 2, v);
                 }),
