@@ -13,6 +13,7 @@ import 'features/auth/screens/otp_screen.dart';
 import 'features/auth/screens/forgot_password_screen.dart';
 import 'features/dashboard/screens/main_shell.dart';
 import 'features/dashboard/screens/dashboard_screen.dart';
+import 'features/dashboard/screens/telemetry_screen.dart';
 import 'features/dashboard/screens/notification_details_screen.dart';
 import 'features/robots/screens/robots_screen.dart';
 import 'features/control/screens/control_screen.dart';
@@ -85,6 +86,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/profile',
             builder: (context, state) => const ProfileScreen(),
+          ),
+          GoRoute(
+            path: '/telemetry',
+            builder: (context, state) => const TelemetryScreen(),
           ),
         ],
       ),
