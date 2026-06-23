@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../../widgets/premium_widgets.dart';
+import '../services/media_service.dart';
+import '../../../core/network/api_client.dart';
 
 class MediaScreen extends StatefulWidget {
   const MediaScreen({super.key});
@@ -11,6 +14,11 @@ class MediaScreen extends StatefulWidget {
 class _MediaScreenState extends State<MediaScreen> with TickerProviderStateMixin {
   late AnimationController _animController;
   late TabController _tabController;
+  
+  final MediaService _mediaService = MediaService();
+  List<dynamic> _mediaList = [];
+  bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -18,6 +26,30 @@ class _MediaScreenState extends State<MediaScreen> with TickerProviderStateMixin
     _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
     _tabController = TabController(length: 2, vsync: this);
     _animController.forward();
+    _fetchMedia();
+  }
+
+  Future<void> _fetchMedia() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final media = await _mediaService.getMedia();
+      if (mounted) {
+        setState(() {
+          _mediaList = media;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -113,13 +145,17 @@ class _MediaScreenState extends State<MediaScreen> with TickerProviderStateMixin
                           ),
                           
                           Expanded(
-                            child: TabBarView(
-                              controller: _tabController,
-                              children: [
-                                _buildMediaGrid(context, isVideo: false),
-                                _buildMediaGrid(context, isVideo: true),
-                              ],
-                            ),
+                            child: _isLoading 
+                                ? const Center(child: CircularProgressIndicator())
+                                : _error != null 
+                                    ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
+                                    : TabBarView(
+                                        controller: _tabController,
+                                        children: [
+                                          _buildMediaGrid(context, isVideo: false),
+                                          _buildMediaGrid(context, isVideo: true),
+                                        ],
+                                      ),
                           ),
                         ],
                       ),
@@ -135,6 +171,17 @@ class _MediaScreenState extends State<MediaScreen> with TickerProviderStateMixin
   }
 
   Widget _buildMediaGrid(BuildContext context, {required bool isVideo}) {
+    final filteredList = _mediaList.where((item) => (item['media_type'] == 'video') == isVideo).toList();
+
+    if (filteredList.isEmpty) {
+      return Center(
+        child: Text(
+          isVideo ? 'No videos found' : 'No photos found',
+          style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+        ),
+      );
+    }
+
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 60),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -143,8 +190,24 @@ class _MediaScreenState extends State<MediaScreen> with TickerProviderStateMixin
         mainAxisSpacing: 16,
         childAspectRatio: 0.8,
       ),
-      itemCount: 6,
+      itemCount: filteredList.length,
       itemBuilder: (context, index) {
+        final item = filteredList[index];
+        final url = item['url'] as String?;
+        final title = item['title'] ?? 'Grabber Alpha';
+        final capturedAtStr = item['captured_at'];
+        String formattedDate = '';
+        if (capturedAtStr != null) {
+          try {
+            final dt = DateTime.parse(capturedAtStr).toLocal();
+            formattedDate = DateFormat('MMM d, yyyy, h:mm a').format(dt);
+          } catch (_) {
+            formattedDate = capturedAtStr;
+          }
+        }
+        
+        final fullUrl = url != null ? '${ApiClient.baseUrl.replaceAll('/api/v1', '')}$url' : null;
+
         return SlideFade(
           animation: _animController,
           delay: 0.2 + (index * 0.05),
@@ -166,11 +229,24 @@ class _MediaScreenState extends State<MediaScreen> with TickerProviderStateMixin
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        Icon(
-                          isVideo ? Icons.videocam_rounded : Icons.photo_rounded,
-                          size: 48,
-                          color: const Color(0xFF155EEF).withValues(alpha: 0.2),
-                        ),
+                        if (fullUrl != null && !isVideo)
+                          Image.network(
+                            fullUrl,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.broken_image_rounded,
+                              size: 48,
+                              color: const Color(0xFF155EEF).withValues(alpha: 0.2),
+                            ),
+                          )
+                        else
+                          Icon(
+                            isVideo ? Icons.videocam_rounded : Icons.photo_rounded,
+                            size: 48,
+                            color: const Color(0xFF155EEF).withValues(alpha: 0.2),
+                          ),
                         if (isVideo)
                           Positioned(
                             bottom: 12, right: 12,
@@ -180,11 +256,11 @@ class _MediaScreenState extends State<MediaScreen> with TickerProviderStateMixin
                                 color: const Color(0xFF1D2939).withValues(alpha: 0.8),
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: const Row(
+                              child: Row(
                                 children: [
-                                  Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 12),
-                                  SizedBox(width: 4),
-                                  Text('0:15', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)),
+                                  const Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 12),
+                                  const SizedBox(width: 4),
+                                  Text(item['duration'] ?? '0:15', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)),
                                 ],
                               ),
                             ),
@@ -198,15 +274,15 @@ class _MediaScreenState extends State<MediaScreen> with TickerProviderStateMixin
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Grabber Alpha',
-                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Color(0xFF1D2939)),
+                      Text(
+                        title,
+                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Color(0xFF1D2939)),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Today, 10:4${index} AM',
+                        formattedDate,
                         style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF64748B)),
                       ),
                     ],
