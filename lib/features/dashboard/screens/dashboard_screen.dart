@@ -544,23 +544,23 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           crossAxisSpacing: 16,
           childAspectRatio: 0.8,
           children: [
-            _buildSimpleNavIcon(Icons.gamepad_rounded, 'Control', Colors.blue),
-            _buildSimpleNavIcon(Icons.videocam_rounded, 'Vision', Colors.green),
-            _buildSimpleNavIcon(Icons.smart_toy_rounded, 'Assistant', Colors.purple),
+            _buildSimpleNavIcon(Icons.gamepad_rounded, 'Control', Colors.blue, onTap: () => context.go('/control')),
+            _buildSimpleNavIcon(Icons.videocam_rounded, 'Vision', Colors.green, onTap: () => context.go('/media')),
+            _buildSimpleNavIcon(Icons.smart_toy_rounded, 'Assistant', Colors.purple, onTap: () => context.go('/ai-control')),
             _buildSimpleNavIcon(Icons.auto_awesome_rounded, 'Automate', Colors.orange),
-            _buildSimpleNavIcon(Icons.bar_chart_rounded, 'Analytics', Colors.teal),
+            _buildSimpleNavIcon(Icons.bar_chart_rounded, 'Analytics', Colors.teal, onTap: () => context.go('/telemetry')),
             _buildSimpleNavIcon(Icons.event_note_rounded, 'Events', Colors.pink),
-            _buildSimpleNavIcon(Icons.settings_rounded, 'Settings', Colors.grey.shade700),
-            _buildSimpleNavIcon(Icons.precision_manufacturing_rounded, 'Robot', Colors.indigo),
+            _buildSimpleNavIcon(Icons.settings_rounded, 'Settings', Colors.grey.shade700, onTap: () => context.go('/profile')),
+            _buildSimpleNavIcon(Icons.precision_manufacturing_rounded, 'Robot', Colors.indigo, onTap: () => context.go('/robots')),
           ],
         )
       ],
     );
   }
 
-  Widget _buildSimpleNavIcon(IconData icon, String label, Color color) {
+  Widget _buildSimpleNavIcon(IconData icon, String label, Color color, {VoidCallback? onTap}) {
     return BouncingCard(
-      onTap: () {},
+      onTap: onTap ?? () {},
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
