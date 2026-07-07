@@ -410,13 +410,13 @@ flutter build ios --release
 
 | Repository | Purpose |
 |---|---|
-| [`01-grabber-architecture`](../01-grabber-architecture) | System documentation and global API contracts |
-| [`02-grabber-firmware`](../02-grabber-firmware) | ESP32 main controller and ESP32-CAM stream servers |
-| [`05-grabber-api-gateway`](../05-grabber-api-gateway) | Inbound router proxying app REST & WebSocket requests |
-| [`06-grabber-auth-service`](../06-grabber-auth-service) | Service managing user profiles, image updates, and JWT sessions |
-| [`07-grabber-robot-service`](../07-grabber-robot-service) | Service processing joint commands and homing schedules |
-| [`08-grabber-telemetry-service`](../08-grabber-telemetry-service) | Core service publishing live telemetry and webcam captures |
-| [`09-grabber-ai-service`](../09-grabber-ai-service) | Engine orchestrating autonomous jobs and computer vision tasks |
+| [`01-grabber-architecture`](https://github.com/thathsarabandara/01-grabber-architecture) | System documentation and global API contracts |
+| [`02-grabber-firmware`](https://github.com/thathsarabandara/02-grabber-firmware) | ESP32 main controller and ESP32-CAM stream servers |
+| [`05-grabber-api-gateway`](https://github.com/thathsarabandara/05-grabber-api-gateway) | Inbound router proxying app REST & WebSocket requests |
+| [`06-grabber-auth-service`](https://github.com/thathsarabandara/06-grabber-auth-service) | Service managing user profiles, image updates, and JWT sessions |
+| [`07-grabber-robot-service`](https://github.com/thathsarabandara/07-grabber-robot-service) | Service processing joint commands and homing schedules |
+| [`08-grabber-telemetry-service`](https://github.com/thathsarabandara/08-grabber-telemetry-service) | Core service publishing live telemetry and webcam captures |
+| [`09-grabber-ai-service`](https://github.com/thathsarabandara/09-grabber-ai-service) | Engine orchestrating autonomous jobs and computer vision tasks |
 
 ---
 
