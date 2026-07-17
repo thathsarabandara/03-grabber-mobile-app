@@ -163,7 +163,7 @@ class _ControlScreenState extends State<ControlScreen> with TickerProviderStateM
                             description: 'Take full control with high-precision joysticks and live telemetry.',
                             icon: Icons.gamepad_rounded,
                             color: const Color(0xFF155EEF),
-                            onTap: () => context.push('/manual-control'),
+                            onTap: () => context.push('/manual-control', extra: {'robotId': _selectedRobotId}),
                           ),
                         ),
                         const SizedBox(height: 24),

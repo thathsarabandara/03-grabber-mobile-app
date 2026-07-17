@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'core/theme/app_theme.dart';
+import 'features/auth/providers/auth_provider.dart';
 import 'features/auth/screens/onboarding_screen.dart';
 import 'features/auth/screens/welcome_screen.dart';
 import 'features/auth/screens/login_screen.dart';
@@ -11,6 +13,7 @@ import 'features/auth/screens/otp_screen.dart';
 import 'features/auth/screens/forgot_password_screen.dart';
 import 'features/dashboard/screens/main_shell.dart';
 import 'features/dashboard/screens/dashboard_screen.dart';
+import 'features/dashboard/screens/telemetry_screen.dart';
 import 'features/dashboard/screens/notification_details_screen.dart';
 import 'features/robots/screens/robots_screen.dart';
 import 'features/control/screens/control_screen.dart';
@@ -84,6 +87,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             path: '/profile',
             builder: (context, state) => const ProfileScreen(),
           ),
+          GoRoute(
+            path: '/telemetry',
+            builder: (context, state) => const TelemetryScreen(),
+          ),
         ],
       ),
       GoRoute(
@@ -104,7 +111,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/manual-control',
-        builder: (context, state) => const ManualControlScreen(),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          return ManualControlScreen(
+            robotId: extra['robotId'] as String?,
+          );
+        },
       ),
       GoRoute(
         path: '/notification-details',
@@ -141,14 +153,14 @@ class GrabberApp extends ConsumerWidget {
   }
 }
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
+class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProviderStateMixin {
   late AnimationController _animController;
 
   @override
@@ -174,7 +186,29 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     await Future.delayed(const Duration(milliseconds: 2000));
 
     if (mounted) {
-      context.go('/onboarding');
+      const storage = FlutterSecureStorage();
+      final hasLoggedInBefore = await storage.read(key: 'has_logged_in_before') == 'true';
+      final biometricsEnabled = await storage.read(key: 'biometrics_enabled') == 'true';
+      final hasToken = await storage.read(key: 'auth_token') != null;
+
+      if (!hasLoggedInBefore) {
+        context.go('/onboarding');
+      } else {
+        if (biometricsEnabled) {
+          final success = await ref.read(authProvider.notifier).biometricLogin();
+          if (success && mounted) {
+            context.go('/dashboard');
+          } else if (mounted) {
+            context.go('/login');
+          }
+        } else {
+          if (hasToken) {
+            context.go('/dashboard');
+          } else {
+            context.go('/login');
+          }
+        }
+      }
     }
   }
 

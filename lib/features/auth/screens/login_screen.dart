@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../widgets/premium_widgets.dart';
 import '../providers/auth_provider.dart';
 
@@ -17,12 +18,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _showBiometricButton = false;
+  bool _hasLoggedInBefore = false;
 
   @override
   void initState() {
     super.initState();
     _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
     _animController.forward();
+    _checkBiometrics();
+  }
+
+  Future<void> _checkBiometrics() async {
+    final authNotifier = ref.read(authProvider.notifier);
+    final isEnabled = await authNotifier.isBiometricsEnabled();
+    final hasCredentials = await authNotifier.hasSavedCredentials();
+    const storage = FlutterSecureStorage();
+    final hasLoggedIn = await storage.read(key: 'has_logged_in_before') == 'true';
+    if (mounted) {
+      setState(() {
+        _showBiometricButton = isEnabled && hasCredentials;
+        _hasLoggedInBefore = hasLoggedIn;
+      });
+    }
   }
 
   @override
@@ -49,13 +67,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-                  child: IconButton(
-                    icon: const Icon(LucideIcons.arrowLeft, color: Colors.white),
-                    onPressed: () => context.go('/welcome'),
-                  ),
-                ),
+                if (!_hasLoggedInBefore)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+                    child: IconButton(
+                      icon: const Icon(LucideIcons.arrowLeft, color: Colors.white),
+                      onPressed: () => context.go('/welcome'),
+                    ),
+                  )
+                else
+                  const SizedBox(height: 48),
                 Expanded(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
@@ -145,37 +166,71 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                                             ),
                                           ),
                                           const SizedBox(height: 32),
-                                          BouncingCard(
-                                            onTap: () async {
-                                              if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-                                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all fields')));
-                                                return;
-                                              }
-                                              final success = await ref.read(authProvider.notifier).login(
-                                                _emailController.text,
-                                                _passwordController.text,
-                                              );
-                                              if (success && mounted) {
-                                                context.go('/dashboard');
-                                              } else if (mounted) {
-                                                final error = ref.read(authProvider).error;
-                                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error ?? 'Login failed')));
-                                              }
-                                            },
-                                            child: Container(
-                                              width: double.infinity,
-                                              padding: const EdgeInsets.symmetric(vertical: 18),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFF155EEF),
-                                                borderRadius: BorderRadius.circular(20),
-                                                boxShadow: [BoxShadow(color: const Color(0xFF155EEF).withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))],
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: BouncingCard(
+                                                  onTap: () async {
+                                                    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+                                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all fields')));
+                                                      return;
+                                                    }
+                                                    final success = await ref.read(authProvider.notifier).login(
+                                                      _emailController.text,
+                                                      _passwordController.text,
+                                                    );
+                                                    if (success && mounted) {
+                                                      context.go('/dashboard');
+                                                    } else if (mounted) {
+                                                      final error = ref.read(authProvider).error;
+                                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error ?? 'Login failed')));
+                                                    }
+                                                  },
+                                                  child: Container(
+                                                    width: double.infinity,
+                                                    padding: const EdgeInsets.symmetric(vertical: 18),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFF155EEF),
+                                                      borderRadius: BorderRadius.circular(20),
+                                                      boxShadow: [BoxShadow(color: const Color(0xFF155EEF).withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))],
+                                                    ),
+                                                    child: Center(
+                                                      child: authState.isLoading 
+                                                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                                        : const Text('Login', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800))
+                                                    ),
+                                                  ),
+                                                ),
                                               ),
-                                              child: Center(
-                                                child: authState.isLoading 
-                                                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                                  : const Text('Login', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800))
-                                              ),
-                                            ),
+                                              if (_showBiometricButton) ...[
+                                                const SizedBox(width: 12),
+                                                BouncingCard(
+                                                  onTap: () async {
+                                                    final success = await ref.read(authProvider.notifier).biometricLogin();
+                                                    if (success && mounted) {
+                                                      context.go('/dashboard');
+                                                    } else if (mounted) {
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        const SnackBar(content: Text('Biometric authentication failed or cancelled')),
+                                                      );
+                                                    }
+                                                  },
+                                                  child: Container(
+                                                    padding: const EdgeInsets.all(18),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFFEFF8FF),
+                                                      borderRadius: BorderRadius.circular(20),
+                                                      border: Border.all(color: const Color(0xFFD1E9FF), width: 1.5),
+                                                    ),
+                                                    child: const Icon(
+                                                      Icons.fingerprint_rounded,
+                                                      color: Color(0xFF155EEF),
+                                                      size: 24,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
                                           ),
                                           const SizedBox(height: 24),
                                           Row(

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'auth_repository.dart';
 import '../../profile/services/profile_service.dart';
+import '../../../core/services/biometric_service.dart';
 
 final authRepositoryProvider = Provider((ref) => AuthRepository());
 final profileServiceProvider = Provider((ref) => ProfileService());
@@ -62,6 +63,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final token = await _repository.login(email: email, password: password);
       await _storage.write(key: 'auth_token', value: token);
+      await _storage.write(key: 'saved_email', value: email);
+      await _storage.write(key: 'saved_password', value: password);
+      await _storage.write(key: 'has_logged_in_before', value: 'true');
       state = state.copyWith(token: token);
       await fetchUser();
       state = state.copyWith(isLoading: false);
@@ -214,6 +218,47 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(isLoading: false, error: e.toString());
       return false;
     }
+  }
+
+  Future<bool> biometricLogin() async {
+    try {
+      final isEnabled = await _storage.read(key: 'biometrics_enabled') == 'true';
+      if (!isEnabled) return false;
+
+      final isSupported = await BiometricService.isBiometricSupported();
+      final hasEnrolled = await BiometricService.hasEnrolledBiometrics();
+      if (!isSupported || !hasEnrolled) return false;
+
+      final authenticated = await BiometricService.authenticate(
+        localizedReason: 'Authenticate to access Grabber',
+      );
+
+      if (!authenticated) return false;
+
+      final email = await _storage.read(key: 'saved_email');
+      final password = await _storage.read(key: 'saved_password');
+
+      if (email != null && password != null) {
+        return await login(email, password);
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> isBiometricsEnabled() async {
+    return await _storage.read(key: 'biometrics_enabled') == 'true';
+  }
+
+  Future<void> setBiometricsEnabled(bool enabled) async {
+    await _storage.write(key: 'biometrics_enabled', value: enabled ? 'true' : 'false');
+  }
+
+  Future<bool> hasSavedCredentials() async {
+    final email = await _storage.read(key: 'saved_email');
+    final password = await _storage.read(key: 'saved_password');
+    return email != null && password != null;
   }
 
   Future<void> logout() async {

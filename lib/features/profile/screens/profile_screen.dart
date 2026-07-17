@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../widgets/premium_widgets.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../../core/services/biometric_service.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -16,12 +17,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with SingleTicker
   late AnimationController _animController;
   String _theme = 'System';
   String _language = 'English';
+  bool _biometricsEnabled = false;
 
   @override
   void initState() {
     super.initState();
     _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
     _animController.forward();
+    _loadBiometricPreference();
+  }
+
+  Future<void> _loadBiometricPreference() async {
+    final enabled = await ref.read(authProvider.notifier).isBiometricsEnabled();
+    setState(() {
+      _biometricsEnabled = enabled;
+    });
   }
 
   @override
@@ -175,6 +185,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with SingleTicker
                               _buildSection('App Preferences', 0.4, [
                                 _buildListTile(Icons.dark_mode_outlined, 'Theme', const Color(0xFF64748B), trailing: _theme, onTap: _showThemeDialog),
                                 _buildListTile(Icons.language_rounded, 'Language', const Color(0xFF64748B), trailing: _language, onTap: _showLanguageDialog),
+                                _buildBiometricTile(context),
                               ]),
                               
                               const SizedBox(height: 24),
@@ -314,6 +325,60 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> with SingleTicker
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildBiometricTile(BuildContext context) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      leading: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF155EEF).withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.fingerprint_rounded, color: Color(0xFF155EEF), size: 22),
+      ),
+      title: const Text('Biometric Login', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFF1D2939))),
+      trailing: Switch.adaptive(
+        value: _biometricsEnabled,
+        activeColor: const Color(0xFF155EEF),
+        onChanged: (value) async {
+          if (value) {
+            final isSupported = await BiometricService.isBiometricSupported();
+            final hasEnrolled = await BiometricService.hasEnrolledBiometrics();
+            if (!isSupported || !hasEnrolled) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Biometrics not supported or setup on this device.')),
+                );
+              }
+              return;
+            }
+
+            final authenticated = await BiometricService.authenticate(
+              localizedReason: 'Confirm biometrics to enable quick login',
+            );
+            if (authenticated) {
+              await ref.read(authProvider.notifier).setBiometricsEnabled(true);
+              setState(() {
+                _biometricsEnabled = true;
+              });
+            } else {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Verification failed. Biometric login not enabled.')),
+                );
+              }
+            }
+          } else {
+            await ref.read(authProvider.notifier).setBiometricsEnabled(false);
+            setState(() {
+              _biometricsEnabled = false;
+            });
+          }
+        },
       ),
     );
   }
